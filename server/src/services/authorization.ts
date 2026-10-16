@@ -39,6 +39,7 @@ import {
 import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
+import { userCreatedAgentAndMayConfigure } from "./agent-creator-access.js";
 
 export type AuthorizationActor =
   {
@@ -121,6 +122,7 @@ export type AuthorizationDecision = {
     | "allow_direct_change"
     | "allow_consented_change"
     | "allow_legacy_agent_creator"
+    | "allow_agent_creator"
     | "allow_issue_mention_grant"
     | "allow_direct_parent_report"
     | "allow_visible_issue_write"
@@ -1776,6 +1778,24 @@ export function authorizationService(db: Db | DbTransaction) {
             explanation: "Allowed by simple mode company-wide task assignment default.",
           });
         }
+      }
+      if (
+        (input.action === "agent_config:read" ||
+          input.action === "agent_config:update" ||
+          input.action === "agent_instructions:update") &&
+        input.resource.type === "agent" &&
+        input.resource.agentId &&
+        await userCreatedAgentAndMayConfigure(db, {
+          companyId,
+          agentId: input.resource.agentId,
+          userId: input.actor.userId,
+        })
+      ) {
+        return allow({
+          action: input.action,
+          reason: "allow_agent_creator",
+          explanation: "Allowed because the actor created this agent (PAPERCLIP_AGENT_CREATOR_CAN_CONFIGURE).",
+        });
       }
       if (input.action === "agent_config:read") {
         return decideWithAgentConfigReadGrant("user", input.actor.userId);

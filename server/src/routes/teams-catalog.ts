@@ -14,6 +14,7 @@ import {
   teamsCatalogService,
 } from "../services/teams-catalog.js";
 import { forbidden } from "../errors.js";
+import { memberAgentPolicy } from "../services/member-agent-policy.js";
 import { assertAuthenticated, assertCompanyAccess, getActorInfo } from "./authz.js";
 
 export function teamsCatalogRoutes(db: Db) {
@@ -21,6 +22,7 @@ export function teamsCatalogRoutes(db: Db) {
   const agents = agentService(db);
   const access = accessService(db);
   const svc = teamsCatalogService(db);
+  const memberPolicy = memberAgentPolicy(db, access);
 
   function canCreateAgents(agent: { permissions: Record<string, unknown> | null | undefined }) {
     if (!agent.permissions || typeof agent.permissions !== "object") return false;
@@ -41,6 +43,11 @@ export function teamsCatalogRoutes(db: Db) {
       const allowed = await access.canUser(companyId, req.actor.userId, "agents:create");
       if (!allowed) {
         throw forbidden("Missing permission: agents:create");
+      }
+      // Catalog teams carry their own runtimes and settings, which bypass the
+      // member runtime policy, so restricted members cannot install them.
+      if (await memberPolicy.isRestricted(req, companyId)) {
+        throw forbidden("Installing a team catalog requires an administrator.");
       }
       return;
     }

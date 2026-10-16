@@ -19,6 +19,7 @@ import { getNativeReviewAssignment, readNativeReviewAssignmentContext, type Nati
 import { paperclipRunnerTransitionConfig, normalizeLegacyRunnerProvider, isPaperclipRunnerProvider } from "@paperclipai/adapter-utils";
 import { executionProjectionForRun, executionProjectionsForRuns } from "../services/execution-projection.js";
 import { selectDashboardRunIds } from "../services/dashboard-run-selection.js";
+import { memberAgentPolicy } from "../services/member-agent-policy.js";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
@@ -543,6 +544,7 @@ export function agentRoutes(
   const router = Router();
   const svc = agentService(db);
   const access = accessService(db);
+  const memberPolicy = memberAgentPolicy(db, access);
   const approvalsSvc = approvalService(db);
   const budgets = budgetService(db);
   const environmentsSvc = environmentService(db);
@@ -1769,7 +1771,7 @@ export function agentRoutes(
     return actorAgent;
   }
 
-  async function assertBoardCanManageAgentsForCompany(req: Request, companyId: string) {
+  async function assertBoardCanManageAgentsForCompany(req: Request, companyId: string, agentId?: string) {
     assertBoard(req);
     assertCompanyAccess(req, companyId);
     const decision = await access.decide({
@@ -1777,8 +1779,17 @@ export function agentRoutes(
       action: "agents:create",
       resource: { type: "company", companyId },
     });
-    if (decision.allowed) return;
-    throw forbidden(decision.explanation, authorizationDeniedDetails(decision));
+    if (!decision.allowed) throw forbidden(decision.explanation, authorizationDeniedDetails(decision));
+    // With creator configuration on, agents:create no longer manages other
+    // people's agents: agent-scoped management also needs configure rights.
+    if (agentId && memberPolicy.config.creatorCanConfigure) {
+      const agentDecision = await access.decide({
+        actor: req.actor,
+        action: "agent_config:update",
+        resource: { type: "agent", companyId, agentId },
+      });
+      if (!agentDecision.allowed) throw forbidden(agentDecision.explanation, authorizationDeniedDetails(agentDecision));
+    }
   }
 
   async function assertBoardCanWakeAgent(req: Request, agent: { id: string; companyId: string }) {
@@ -2029,7 +2040,7 @@ export function agentRoutes(
     const agent = await getAccessibleResource(req, res, svc.getById(id), "Agent not found");
     if (!agent) return null;
     if (req.actor.type === "board") {
-      await assertBoardCanManageAgentsForCompany(req, agent.companyId);
+      await assertBoardCanManageAgentsForCompany(req, agent.companyId, agent.id);
     }
     return agent;
   }
@@ -3302,10 +3313,21 @@ export function agentRoutes(
     }
   });
 
+  router.get("/companies/:companyId/member-agent-policy", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    res.json(await memberPolicy.describe(req, companyId));
+  });
+
   router.get("/companies/:companyId/adapters/:type/models", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
     const type = assertKnownAdapterType(req.params.type as string);
+    const memberModels = await memberPolicy.allowedModelsFor(req, companyId, type);
+    if (memberModels) {
+      res.json(memberModels);
+      return;
+    }
     const poolId = asNonEmptyString(req.query.poolId);
     if (poolId) {
       const pool = (await aiConnectionRouterService(db).selectable(companyId, getActorInfo(req).actorId)).find(pool => pool.id === poolId);
@@ -3525,6 +3547,7 @@ export function agentRoutes(
       const companyId = req.params.companyId as string;
       const type = assertKnownAdapterType(req.params.type as string);
       await assertCanCreateAgentsForCompany(req, companyId);
+      await memberPolicy.applyToAgentWrite(req, { companyId, mode: "test", body: req.body, adapterType: type });
 
       const adapter = requireServerAdapter(type);
 
@@ -4536,7 +4559,7 @@ export function agentRoutes(
     const id = req.params.id as string;
     const agent = await getAccessibleResource(req, res, svc.getById(id), "Agent not found");
     if (!agent) return;
-    await assertBoardCanManageAgentsForCompany(req, agent.companyId);
+    await assertBoardCanManageAgentsForCompany(req, agent.companyId, agent.id);
 
     const state = await heartbeat.getRuntimeState(id);
     res.json(state);
@@ -4547,7 +4570,7 @@ export function agentRoutes(
     const id = req.params.id as string;
     const agent = await getAccessibleResource(req, res, svc.getById(id), "Agent not found");
     if (!agent) return;
-    await assertBoardCanManageAgentsForCompany(req, agent.companyId);
+    await assertBoardCanManageAgentsForCompany(req, agent.companyId, agent.id);
 
     const sessions = await heartbeat.listTaskSessions(id);
     res.json(
@@ -4563,7 +4586,7 @@ export function agentRoutes(
     const id = req.params.id as string;
     const agent = await getAccessibleResource(req, res, svc.getById(id), "Agent not found");
     if (!agent) return;
-    await assertBoardCanManageAgentsForCompany(req, agent.companyId);
+    await assertBoardCanManageAgentsForCompany(req, agent.companyId, agent.id);
 
     const taskKey =
       typeof req.body.taskKey === "string" && req.body.taskKey.trim().length > 0
@@ -4595,6 +4618,8 @@ export function agentRoutes(
   router.post("/companies/:companyId/agent-hires", validate(createAgentHireSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCanCreateAgentsForCompany(req, companyId);
+    await memberPolicy.applyToAgentWrite(req, { companyId, mode: "create", body: req.body });
+    memberPolicy.recordCreator(req, req.body);
     const sourceIssueIds = parseSourceIssueIds(req.body);
     const {
       desiredSkills: requestedDesiredSkills,
@@ -4918,6 +4943,8 @@ export function agentRoutes(
   router.post("/companies/:companyId/agents", validate(createAgentSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCanCreateAgentsForCompany(req, companyId);
+    await memberPolicy.applyToAgentWrite(req, { companyId, mode: "create", body: req.body });
+    memberPolicy.recordCreator(req, req.body);
 
     const company = await db
       .select()
@@ -5104,7 +5131,7 @@ export function agentRoutes(
         return;
       }
     } else {
-      await assertBoardCanManageAgentsForCompany(req, existing.companyId);
+      await assertBoardCanManageAgentsForCompany(req, existing.companyId, existing.id);
     }
 
     const agent = await svc.updatePermissions(id, req.body);
@@ -5553,6 +5580,13 @@ export function agentRoutes(
       return;
     }
 
+    await memberPolicy.applyToAgentWrite(req, {
+      companyId: existing.companyId,
+      mode: "update",
+      body: req.body as Record<string, unknown>,
+      existing,
+    });
+    memberPolicy.preserveCreator(existing.metadata, req.body as Record<string, unknown>);
     const patchData = { ...(req.body as Record<string, unknown>) };
     const replaceAdapterConfig = patchData.replaceAdapterConfig === true;
     delete patchData.replaceAdapterConfig;
@@ -6484,7 +6518,7 @@ export function agentRoutes(
     const id = req.params.id as string;
     const agent = await getAccessibleResource(req, res, svc.getById(id), "Agent not found");
     if (!agent) return;
-    await assertBoardCanManageAgentsForCompany(req, agent.companyId);
+    await assertBoardCanManageAgentsForCompany(req, agent.companyId, agent.id);
     if (agent.adapterType !== "claude_local") {
       res.status(400).json({ error: "Login is only supported for claude_local agents" });
       return;

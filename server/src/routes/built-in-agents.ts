@@ -5,6 +5,7 @@ import { validate } from "../middleware/validate.js";
 import { forbidden, notFound } from "../errors.js";
 import { accessService, instanceSettingsService, logActivity } from "../services/index.js";
 import { builtInAgentService } from "../services/built-in-agents.js";
+import { memberAgentPolicy } from "../services/member-agent-policy.js";
 import { authorizationDeniedDetails } from "../services/authorization.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 import type { BuiltInAgentState } from "../services/built-in-agents.js";
@@ -72,6 +73,7 @@ function redactBuiltInAgentListState(state: BuiltInAgentState): BuiltInAgentStat
 export function builtInAgentRoutes(db: Db) {
   const router = Router();
   const access = accessService(db);
+  const memberPolicy = memberAgentPolicy(db, access);
   const svc = builtInAgentService(db);
   const settings = instanceSettingsService(db);
 
@@ -89,8 +91,11 @@ export function builtInAgentRoutes(db: Db) {
       action: "agents:create",
       resource: { type: "company", companyId },
     });
-    if (decision.allowed) return;
-    throw forbidden(decision.explanation, authorizationDeniedDetails(decision));
+    if (!decision.allowed) throw forbidden(decision.explanation, authorizationDeniedDetails(decision));
+    // Built-in agents use preset runtimes outside the member runtime policy.
+    if (await memberPolicy.isRestricted(req, companyId)) {
+      throw forbidden("Provisioning built-in agents requires an administrator.");
+    }
   }
 
   async function assertCanControlBuiltInRoutine(req: Request, companyId: string) {

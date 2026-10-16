@@ -173,7 +173,7 @@ const externalAdapter: ServerAdapterModule = {
 
 const missingAdapterType = "missing_adapter_validation_test";
 
-async function createApp() {
+async function createApp(actor?: Record<string, unknown>) {
   const [{ agentRoutes }, { errorHandler }] = await Promise.all([
     vi.importActual<typeof import("../routes/agents.js")>("../routes/agents.js"),
     vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
@@ -181,7 +181,7 @@ async function createApp() {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    (req as any).actor = {
+    (req as any).actor = actor ?? {
       type: "board",
       userId: "local-board",
       companyIds: ["company-1"],
@@ -1141,5 +1141,93 @@ describe("agent routes adapter validation", () => {
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(mockAgentService.update).toHaveBeenCalledOnce();
+  });
+
+  describe("member agent policy (Dixie)", () => {
+    const memberEnv = {
+      PAPERCLIP_AGENT_CREATOR_CAN_CONFIGURE: "true",
+      PAPERCLIP_MEMBER_ADAPTER_ALLOWLIST: "external_test",
+      PAPERCLIP_MEMBER_ADAPTER_DEFAULTS: JSON.stringify({ external_test: { engine: "cli", timeoutSec: 600 } }),
+      PAPERCLIP_MEMBER_MODEL_ALLOWLIST: JSON.stringify({ external_test: ["approved-model"] }),
+    };
+    const memberActor = {
+      type: "board",
+      userId: "member-1",
+      companyIds: ["company-1"],
+      memberships: [{ companyId: "company-1", membershipRole: "operator", status: "active" }],
+      source: "session",
+      isInstanceAdmin: false,
+    };
+
+    beforeEach(async () => {
+      for (const [key, value] of Object.entries(memberEnv)) vi.stubEnv(key, value);
+      // A member may create agents but holds no agents:configure grant.
+      mockAccessService.decide.mockImplementation(async ({ action }: { action: string }) => ({
+        allowed: action === "agents:create",
+        reason: action === "agents:create" ? "allow_explicit_grant" : "deny_missing_grant",
+        explanation: action === "agents:create" ? "Allowed" : `Missing permission for ${action}`,
+      }));
+      const { registerServerAdapter } = await import("../adapters/index.js");
+      registerServerAdapter(externalAdapter);
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("rejects runtimes outside the member allowlist before creating anything", async () => {
+      const app = await createApp(memberActor);
+      const res = await requestApp(app, (baseUrl) =>
+        request(baseUrl)
+          .post("/api/companies/company-1/agents")
+          .send({ name: "Shell", adapterType: "process", adapterConfig: { command: "/bin/sh" } }),
+      );
+      expect(res.status, JSON.stringify(res.body)).toBe(403);
+      expect(res.body.code).toBe("member_adapter_not_allowed");
+      expect(mockAgentService.create).not.toHaveBeenCalled();
+    });
+
+    it("merges admin defaults under the member's allowed keys and records the creator", async () => {
+      const app = await createApp(memberActor);
+      const res = await requestApp(app, (baseUrl) =>
+        request(baseUrl)
+          .post("/api/companies/company-1/agents")
+          .send({
+            name: "Mine",
+            adapterType: "external_test",
+            adapterConfig: { model: "approved-model", command: "/bin/sh", timeoutSec: 1 },
+            metadata: { createdByUserId: "someone-else" },
+          }),
+      );
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      const input = mockAgentService.create.mock.calls[0]![1] as Record<string, unknown>;
+      expect(input.adapterConfig).toMatchObject({ engine: "cli", timeoutSec: 600, model: "approved-model" });
+      expect((input.adapterConfig as Record<string, unknown>).command).toBeUndefined();
+      expect(input.metadata).toEqual({ createdByUserId: "member-1" });
+    });
+
+    it("rejects unapproved models and lists only approved ones", async () => {
+      const app = await createApp(memberActor);
+      const rejected = await requestApp(app, (baseUrl) =>
+        request(baseUrl)
+          .post("/api/companies/company-1/agents")
+          .send({ name: "Mine", adapterType: "external_test", adapterConfig: { model: "other" } }),
+      );
+      expect(rejected.status, JSON.stringify(rejected.body)).toBe(403);
+      expect(rejected.body.code).toBe("member_model_not_allowed");
+
+      const models = await requestApp(app, (baseUrl) =>
+        request(baseUrl).get("/api/companies/company-1/adapters/external_test/models"),
+      );
+      expect(models.body).toEqual([{ id: "approved-model", label: "approved-model" }]);
+    });
+
+    it("requires agent-level configure rights to manage someone else's agent", async () => {
+      const app = await createApp(memberActor);
+      const res = await requestApp(app, (baseUrl) =>
+        request(baseUrl).post("/api/agents/11111111-1111-4111-8111-111111111111/pause"),
+      );
+      expect(res.status, JSON.stringify(res.body)).toBe(403);
+    });
   });
 });
