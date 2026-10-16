@@ -156,6 +156,19 @@ cannot choose an AI connection or send test credentials, and they cannot install
 team catalogs or built-in agents, because those bring their own runtimes.
 Malformed JSON in these variables stops the server from starting.
 
+### Slack behaviour (`metadata.dixieSlack`)
+
+When the Dixie plugin's `GET /api/plugins/mindset-health.dixie/api/slack/allowed-channels?companyId=…`
+returns a channel list, the new-agent wizard shows a Slack step and the agent's
+Configuration page shows a Slack card. Both store the choice as
+`metadata.dixieSlack = { mode, channels, keywords }` (`mode` is `off`, `mention`,
+`keywords` or `invite`). Members can set it on agents they can configure; agent
+metadata is not restricted by the member policy. The server rejects a malformed
+value with `invalid_dixie_slack`: `mention` and `keywords` need at least one
+channel, and `keywords` needs 1 to 10 keywords of at least 4 characters each. The
+value is kept through hire approval. When the route returns 404, an error or
+`{ "enabled": false }`, the UI is unchanged from upstream.
+
 Example for Claude Code (which needs the CLI engine and an API key from a company
 secret) and Hermes (where each model has its own provider):
 
