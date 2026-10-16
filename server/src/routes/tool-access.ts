@@ -89,6 +89,7 @@ import { redactRemoteUrlCredential } from "../services/remote-url-credentials.js
 import { connectionIntentDeliveryService } from "../services/connection-intent-delivery.js";
 import type { heartbeatService } from "../services/heartbeat.js";
 import { BRAND_NAME } from "../brand.js";
+import { connectionsAdminOnlyEnabled, PERSONAL_CONNECTION_DENIAL_REASON } from "../services/connections-admin-only.js";
 
 const COMPANY_INSTALL_DENIAL_REASON =
   "Only someone who can configure this connection can choose this.";
@@ -652,6 +653,20 @@ function connectorEnrollmentPrincipal(req: Request): string {
     ));
   }
 
+  const connectionsAdminOnly = connectionsAdminOnlyEnabled();
+
+  /** PAPERCLIP_CONNECTIONS_ADMIN_ONLY: personal connections need connection-manager rights. */
+  async function assertPersonalConnectionAllowed(req: Request, companyId: string) {
+    if (!connectionsAdminOnly) return;
+    if (await isToolConnectionManagerQuiet(req, companyId)) return;
+    throw forbidden(PERSONAL_CONNECTION_DENIAL_REASON, { code: "connections_admin_only" });
+  }
+
+  async function userIsConnectionManager(companyId: string, userId: string) {
+    return await access.isInstanceAdmin(userId)
+      || await access.hasPermission(companyId, "user", userId, "tools:manage_connections");
+  }
+
   async function describeConnectionCreateCapabilities(
     req: Request,
     companyId: string,
@@ -662,6 +677,12 @@ function connectorEnrollmentPrincipal(req: Request): string {
       organizationGrantReason: canManageConnections ? null : ORGANIZATION_GRANT_DENIAL_REASON,
       canSetCompanyInstall: canManageConnections,
       companyInstallReason: canManageConnections ? null : COMPANY_INSTALL_DENIAL_REASON,
+      ...(connectionsAdminOnly
+        ? {
+            canCreatePersonalGrant: canManageConnections,
+            personalGrantReason: canManageConnections ? null : PERSONAL_CONNECTION_DENIAL_REASON,
+          }
+        : {}),
     };
   }
 
@@ -701,7 +722,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
       canSetCompanyInstall: canConfigure,
       // Personal consent belongs to the person: it needs a named board user, and
       // it is never available to a viewer or to an unauthenticated principal.
-      canConnectAsCurrentUser: Boolean(req.actor.userId) && mutationCapable,
+      canConnectAsCurrentUser: Boolean(req.actor.userId) && mutationCapable && (!connectionsAdminOnly || isManager),
       canManageAgentInstalls: mutationCapable && editableAgentIds.length > 0,
       canViewOtherPersonalIdentities: isManager,
       editableAgentIds,
@@ -791,6 +812,13 @@ function connectorEnrollmentPrincipal(req: Request): string {
     if (req.actor.type !== "agent" || !req.actor.agentId || !req.actor.companyId || !req.actor.runId) {
       res.status(401).json({ error: "Active agent run authentication required" });
       return;
+    }
+    if (
+      connectionsAdminOnly
+      && req.body.subjectUserId
+      && !await userIsConnectionManager(req.actor.companyId, req.body.subjectUserId)
+    ) {
+      throw forbidden(PERSONAL_CONNECTION_DENIAL_REASON, { code: "connections_admin_only" });
     }
     const result = await svc.startAuthorizationForAgent({
       companyId: req.actor.companyId,
@@ -911,6 +939,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
     // Personal connection creation remains available to ordinary active
     // members, but sharing a credential with every human is a manager
     // operation and must be enforced here, not inferred by the client.
+    if (effectiveGrantKind === "user") await assertPersonalConnectionAllowed(req, companyId);
     const createsManagedGrant = effectiveGrantKind === "organization" || effectiveGrantKind === "agent";
     if (createsManagedGrant && !await isToolConnectionManagerQuiet(req, companyId)) {
       throw forbidden(
@@ -986,6 +1015,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
       if (!req.actor.userId || req.actor.userId !== req.body.subjectUserId) {
         throw forbidden("Board users may only authorize their own connection subject");
       }
+      await assertPersonalConnectionAllowed(req, companyId);
       const existing = await svc.getConnection(req.params.connectionId as string, companyId);
       await assertToolConnectionAccess(req, existing);
       const result = await svc.startOAuth(companyId, existing.id, {
@@ -1013,6 +1043,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
       // proves this caller is the connection's retained subject before it can
       // create OAuth state. Shared reconnects keep the stricter configure gate.
       activeToolMembership(req, existing.companyId);
+      await assertPersonalConnectionAllowed(req, existing.companyId);
     } else {
       await assertToolConnectionConfigureAccess(req, existing);
     }
@@ -1477,6 +1508,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
       const companyId = req.params.companyId as string;
       const existing = await svc.getConnection(req.params.connectionId as string, companyId);
       await assertToolConnectionConfigureAccess(req, existing);
+      if (req.body.grantKind === "user") await assertPersonalConnectionAllowed(req, companyId);
       const result = await svc.finalizeOAuthAccess(companyId, existing.id, req.body, getActorInfo(req));
       await logActivity(db, {
         companyId,
@@ -1547,6 +1579,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
   router.post("/companies/:companyId/tools/examples/:id/install", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertToolAppMutationAccess(req, companyId);
+    await assertPersonalConnectionAllowed(req, companyId);
     const result = await svc.installExample(companyId, req.params.id as string, getActorInfo(req));
     await logActivity(db, {
       companyId,
@@ -1677,6 +1710,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
   router.post("/companies/:companyId/tools/connections", validate(createToolConnectionSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     assertToolAppMutationAccess(req, companyId);
+    await assertPersonalConnectionAllowed(req, companyId);
     try {
       const connection = await svc.createConnection(companyId, req.body, getActorInfo(req));
       await logActivity(db, {
@@ -1851,6 +1885,7 @@ function connectorEnrollmentPrincipal(req: Request): string {
     if (!connection) return;
     const ownerUserId = req.actor.userId;
     if (!ownerUserId) throw forbidden("A named user is required to delegate a personal grant");
+    await assertPersonalConnectionAllowed(req, connection.companyId);
     const agentId = req.body.agentId;
     const delegation = await svc.createConnectionGrantDelegation(
       connection.id,

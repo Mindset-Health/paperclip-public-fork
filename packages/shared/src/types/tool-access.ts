@@ -306,6 +306,9 @@ export interface ToolConnectionCreateCapabilities {
   organizationGrantReason: string | null;
   canSetCompanyInstall: boolean;
   companyInstallReason: string | null;
+  /** Present only when PAPERCLIP_CONNECTIONS_ADMIN_ONLY is on; absent means allowed. */
+  canCreatePersonalGrant?: boolean;
+  personalGrantReason?: string | null;
 }
 
 export interface ConnectionGrantsResponse {

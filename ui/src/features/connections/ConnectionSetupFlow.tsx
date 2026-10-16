@@ -1983,6 +1983,9 @@ function StandardConnectionSetupFlow({
           ? galleryQuery.data.capabilities.organizationGrantReason
             ?? "Only a connection manager can share this credential with the organization."
           : null,
+        galleryQuery.data?.capabilities?.canCreatePersonalGrant === false
+          ? galleryQuery.data.capabilities.personalGrantReason ?? null
+          : null,
         galleryQuery.data?.capabilities?.canSetCompanyInstall === false
           ? galleryQuery.data.capabilities.companyInstallReason
             ?? "Only someone who can configure this connection can give every agent access."
@@ -4074,7 +4077,7 @@ export function AccessStepContent({
   setInstallAgentIds: (ids: Set<string>) => void;
   /** Task-hosted intents grant reach only to the agent that requested it. */
   lockedAgentId?: string;
-  capabilities?: Pick<ToolConnectionCreateCapabilities, "canCreateOrganizationGrant" | "canSetCompanyInstall"> & {
+  capabilities?: Pick<ToolConnectionCreateCapabilities, "canCreateOrganizationGrant" | "canSetCompanyInstall" | "canCreatePersonalGrant"> & {
     organizationGrantReason?: string | null;
     companyInstallReason?: string | null;
     editableAgentIds?: string[];
@@ -4106,9 +4109,12 @@ export function AccessStepContent({
   const canSetCompanyInstall = capabilities?.canSetCompanyInstall ?? true;
   const canCreateOrganizationGrant = capabilities?.canCreateOrganizationGrant ?? true;
   const needsIdentityChoice = authKind !== "none";
-  const allowedGrantKinds = grantKinds ?? (["user", "organization"] satisfies ConnectionGrantKind[]);
+  // PAPERCLIP_CONNECTIONS_ADMIN_ONLY hides "Just me" for people who cannot create personal connections.
+  const canCreatePersonalGrant = capabilities?.canCreatePersonalGrant ?? true;
+  const allowedGrantKinds = (grantKinds ?? (["user", "organization"] satisfies ConnectionGrantKind[]))
+    .filter((kind) => kind !== "user" || canCreatePersonalGrant);
   const identityChoiceAllowed = !needsIdentityChoice
-    || grantKind === "user"
+    || (grantKind === "user" && canCreatePersonalGrant)
     || grantKind === "agent"
     || canCreateOrganizationGrant;
   const canContinue = identityChoiceAllowed && (preserveAgentAccess
