@@ -1,0 +1,130 @@
+/* Dixie Flatline theme, carried over from the original Dixie console:
+   parchment pages, walnut and brass trim, slab-serif headings. Kept in its own
+   file, loaded after index.css, so upstream rebases only touch the import. */
+@import url("https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Roboto+Slab:wght@600;700&display=swap");
+
+:root {
+  --dixie-parchment: #ecdfc3;
+  --dixie-paper: #fbf4e4;
+  --dixie-ink: #2f2014;
+  --dixie-ink-soft: #6b5440;
+  --dixie-walnut: #2b1d12;
+  --dixie-walnut-light: #4a3220;
+  --dixie-brass-light: #f1d48a;
+  --dixie-brass: #c08f3e;
+  --dixie-brass-dark: #7a531d;
+  --dixie-copper: #a85a2a;
+  --dixie-rule: #cdb68c;
+}
+
+:root:not(.dark) {
+  --background: #f3e9d2;
+  --foreground: var(--dixie-ink);
+  --card: var(--dixie-paper);
+  --card-foreground: var(--dixie-ink);
+  --popover: var(--dixie-paper);
+  --popover-foreground: var(--dixie-ink);
+  --primary: var(--dixie-brass-dark);
+  --primary-foreground: #fff3cf;
+  --secondary: #eadbb9;
+  --secondary-foreground: var(--dixie-walnut-light);
+  --muted: #ecdfc3;
+  --muted-foreground: var(--dixie-ink-soft);
+  --accent: #e6d5ae;
+  --accent-foreground: var(--dixie-walnut);
+  --border: var(--dixie-rule);
+  --input: var(--dixie-rule);
+  --ring: var(--dixie-brass);
+  --scrollbar-thumb: #b89c6c;
+  --scrollbar-thumb-hover: #9a7f50;
+  --sidebar: #efe2c4;
+  --sidebar-foreground: var(--dixie-ink);
+  --sidebar-primary: var(--dixie-brass-dark);
+  --sidebar-primary-foreground: #fff3cf;
+  --sidebar-accent: #e3cf9f;
+  --sidebar-accent-foreground: var(--dixie-walnut);
+  --sidebar-border: var(--dixie-rule);
+  --sidebar-ring: var(--dixie-brass);
+  --chart-1: #c08f3e;
+  --chart-2: #a85a2a;
+  --chart-3: #4f9a8a;
+  --chart-4: #7a531d;
+  --chart-5: #4a3220;
+}
+
+.dark {
+  --background: #1f160e;
+  --foreground: #f1e4c6;
+  --card: #2b1d12;
+  --card-foreground: #f1e4c6;
+  --popover: #2b1d12;
+  --popover-foreground: #f1e4c6;
+  --primary: var(--dixie-brass-light);
+  --primary-foreground: var(--dixie-walnut);
+  --secondary: #3a2819;
+  --secondary-foreground: #f1e4c6;
+  --muted: #3a2819;
+  --muted-foreground: #c4ad86;
+  --accent: #46301d;
+  --accent-foreground: #fff3cf;
+  --border: #f1d48a24;
+  --input: #f1d48a30;
+  --ring: var(--dixie-brass);
+  --sidebar: #261a10;
+  --sidebar-foreground: #f1e4c6;
+  --sidebar-accent: #46301d;
+  --sidebar-accent-foreground: #fff3cf;
+  --sidebar-border: #f1d48a24;
+}
+
+h1,
+h2 {
+  font-family: "Alfa Slab One", "Roboto Slab", Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+:root:not(.dark) :is(h1, h2) {
+  color: var(--dixie-walnut-light);
+}
+h3 {
+  font-family: "Roboto Slab", Georgia, serif;
+}
+
+:root:not(.dark) .prose a {
+  color: var(--dixie-copper);
+}
+
+/* Brass primary buttons, as on the original console. */
+:root:not(.dark) [data-slot="button"][data-variant="default"] {
+  background: linear-gradient(180deg, var(--dixie-brass-light) 0%, var(--dixie-brass) 55%, #a87628 100%);
+  color: #2a1a08;
+  border: 1px solid var(--dixie-brass-dark);
+  box-shadow: 0 1px 0 #fff3cf inset, 0 2px 4px #3b230f33;
+  text-shadow: 0 1px 0 #f7e2a8;
+}
+:root:not(.dark) [data-slot="button"][data-variant="default"]:hover {
+  filter: brightness(1.06);
+}
+
+/* Banner strip: the artwork on parchment above a brass rule. */
+.dixie-banner {
+  flex: none;
+  line-height: 0;
+  background: #fdf8ec; /* the artwork's own paper colour, so it has no edge */
+  border-bottom: 3px solid var(--dixie-brass-dark);
+  box-shadow: inset 0 -1px 0 var(--dixie-rule);
+}
+.dixie-banner img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: 72px;
+  object-fit: contain;
+  object-position: left center;
+}
+@media (width < 48rem) {
+  .dixie-banner img {
+    height: auto;
+    width: 100%;
+  }
+}
