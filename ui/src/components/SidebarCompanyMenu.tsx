@@ -34,6 +34,7 @@ import {
 import { useCompany } from "@/context/CompanyContext";
 import { useDialogActions } from "@/context/DialogContext";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
+import { useGcpIapInstance } from "@/hooks/useGcpIapInstance";
 import { useHiddenSettings } from "@/hooks/useHiddenSettings";
 import { useCompanyOrder } from "@/hooks/useCompanyOrder";
 import { useSignOut } from "@/hooks/useSignOut";
@@ -41,6 +42,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "@/lib/utils";
 import { useSidebar } from "../context/SidebarContext";
 import { CompanyPatternIcon } from "./CompanyPatternIcon";
+import { SidebarCompanyHeader } from "./SidebarCompanyHeader";
 
 import { PluginOrganizationSwitcher } from "./PluginOrganizationSwitcher";
 
@@ -145,6 +147,8 @@ function SortableCompanyItem({
 }
 
 export function SidebarCompanyMenu(props: SidebarCompanyMenuProps = {}) {
+  // IAP instances hold one company that every allowed user joins automatically.
+  if (useGcpIapInstance()) return <SidebarCompanyHeader />;
   return (
     <PluginOrganizationSwitcher {...props}>
       <BuiltinCompanyMenu {...props} />

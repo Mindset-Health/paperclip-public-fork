@@ -199,6 +199,20 @@ describe("SidebarCompanyMenu", () => {
     await flushReact();
   }
 
+  it.each([false, true])("shows a static company header behind Google Cloud IAP (production=%s)", async (production) => {
+    const { root } = renderMenu({ health: { status: "ok", authProvider: "gcp-iap" }, production });
+    await flushReact();
+
+    expect(container.textContent).toContain("Acme Labs");
+    expect(container.querySelector("button")).toBeNull();
+    expect(document.body.textContent).not.toContain("Create organization");
+    expect(document.body.textContent).not.toContain("Invite people");
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
   // This menu is the one the app renders, so it is the only place a customer can
   // act on a failed company list. Saying "No companies" there states something
   // about the account that a failed request cannot support, and leaves the tab
