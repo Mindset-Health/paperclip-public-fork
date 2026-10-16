@@ -33,6 +33,7 @@ import { KeyboardShortcutsCheatsheet } from "./KeyboardShortcutsCheatsheet";
 import { ToastViewport } from "./ToastViewport";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { WorktreeBanner } from "./WorktreeBanner";
+import { DixieBanner } from "./DixieBanner";
 import { DevRestartBanner } from "./DevRestartBanner";
 import { StandaloneBrowserControls } from "./StandaloneBrowserControls";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
@@ -607,6 +608,7 @@ export function Layout() {
         </a>
         <WorktreeBanner />
         <DevRestartBanner devServer={health?.devServer} />
+        <DixieBanner />
         <div
           className={cn(
             "min-h-0 flex-1",
