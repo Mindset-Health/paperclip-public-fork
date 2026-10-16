@@ -14,6 +14,12 @@
       "localAsset": "/brands/apps/airtable.svg"
     },
     {
+      "slug": "amplitude",
+      "provider": "Amplitude",
+      "catalogVisible": true,
+      "localAsset": "/brands/apps/amplitude.svg"
+    },
+    {
       "slug": "anthropic",
       "provider": "Anthropic",
       "catalogVisible": true,
