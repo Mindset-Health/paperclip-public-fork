@@ -173,7 +173,7 @@ const externalAdapter: ServerAdapterModule = {
 
 const missingAdapterType = "missing_adapter_validation_test";
 
-async function createApp(actor?: Record<string, unknown>) {
+async function createApp(actor?: Record<string, unknown>, options: { requireBoardApprovalForNewAgents?: boolean } = {}) {
   const [{ agentRoutes }, { errorHandler }] = await Promise.all([
     vi.importActual<typeof import("../routes/agents.js")>("../routes/agents.js"),
     vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
@@ -196,7 +196,7 @@ async function createApp(actor?: Record<string, unknown>) {
         where: vi.fn(async () => [
           {
             id: "company-1",
-            requireBoardApprovalForNewAgents: false,
+            requireBoardApprovalForNewAgents: options.requireBoardApprovalForNewAgents ?? false,
           },
         ]),
       })),
@@ -1220,6 +1220,87 @@ describe("agent routes adapter validation", () => {
         request(baseUrl).get("/api/companies/company-1/adapters/external_test/models"),
       );
       expect(models.body).toEqual([{ id: "approved-model", label: "approved-model" }]);
+    });
+
+    const dixieSlack = { mode: "keywords", channels: ["C0123ABCD"], keywords: ["deploy", "incident"] };
+
+    it("lets a member set metadata.dixieSlack on create and keeps the recorded creator", async () => {
+      const app = await createApp(memberActor);
+      const res = await requestApp(app, (baseUrl) =>
+        request(baseUrl)
+          .post("/api/companies/company-1/agents")
+          .send({ name: "Mine", adapterType: "external_test", adapterConfig: {}, metadata: { dixieSlack } }),
+      );
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      const input = mockAgentService.create.mock.calls[0]![1] as Record<string, unknown>;
+      expect(input.metadata).toEqual({ dixieSlack, createdByUserId: "member-1" });
+    });
+
+    it("carries metadata.dixieSlack through a hire that needs approval", async () => {
+      mockApprovalService.create.mockImplementation(async (_companyId: string, input: Record<string, unknown>) => ({
+        id: "approval-1",
+        companyId: "company-1",
+        ...input,
+      }));
+      const app = await createApp(memberActor, { requireBoardApprovalForNewAgents: true });
+      const res = await requestApp(app, (baseUrl) =>
+        request(baseUrl)
+          .post("/api/companies/company-1/agent-hires")
+          .send({ name: "Mine", adapterType: "external_test", adapterConfig: {}, metadata: { dixieSlack } }),
+      );
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      const input = mockAgentService.create.mock.calls[0]![1] as Record<string, unknown>;
+      expect(input).toMatchObject({ status: "pending_approval", metadata: { dixieSlack, createdByUserId: "member-1" } });
+      const approval = mockApprovalService.create.mock.calls[0]![1] as { payload: Record<string, unknown> };
+      // Approval re-applies payload.metadata when it activates the agent.
+      expect(approval.payload.metadata).toEqual({ dixieSlack, createdByUserId: "member-1" });
+    });
+
+    it("lets a member change metadata.dixieSlack on an agent they created", async () => {
+      const own = {
+        ...(await mockAgentService.getById()),
+        adapterType: "external_test",
+        adapterConfig: { model: "approved-model" },
+        metadata: { createdByUserId: "member-1" },
+      };
+      mockAgentService.getById.mockResolvedValue(own);
+      // The real access service grants agent-level configure to the recorded
+      // creator (authorization.ts); company-wide agents:configure stays denied.
+      mockAccessService.decide.mockImplementation(async ({ action }: { action: string }) => {
+        const allowed = action === "agents:create" || action === "agent_config:update";
+        return { allowed, reason: allowed ? "allow_agent_creator" : "deny_missing_grant", explanation: allowed ? "Allowed" : "Denied" };
+      });
+      const app = await createApp(memberActor);
+      const res = await requestApp(app, (baseUrl) =>
+        request(baseUrl)
+          .patch("/api/agents/11111111-1111-4111-8111-111111111111")
+          .send({ metadata: { dixieSlack: { mode: "invite", channels: [], keywords: [] } } }),
+      );
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      const patch = mockAgentService.update.mock.calls[0]![1] as Record<string, unknown>;
+      expect(patch.metadata).toEqual({
+        dixieSlack: { mode: "invite", channels: [], keywords: [] },
+        createdByUserId: "member-1",
+      });
+    });
+
+    it("rejects a malformed metadata.dixieSlack before creating anything", async () => {
+      const app = await createApp(memberActor);
+      for (const bad of [
+        { mode: "everything", channels: ["C1"], keywords: [] },
+        { mode: "keywords", channels: ["C1"], keywords: ["ops"] },
+        { mode: "keywords", channels: ["C1"], keywords: Array.from({ length: 11 }, (_, i) => `word${i}`) },
+        { mode: "mention", channels: [], keywords: [] },
+      ]) {
+        const res = await requestApp(app, (baseUrl) =>
+          request(baseUrl)
+            .post("/api/companies/company-1/agents")
+            .send({ name: "Mine", adapterType: "external_test", adapterConfig: {}, metadata: { dixieSlack: bad } }),
+        );
+        expect(res.status, JSON.stringify(res.body)).toBe(422);
+        expect(res.body.code ?? res.body.details?.code).toBe("invalid_dixie_slack");
+      }
+      expect(mockAgentService.create).not.toHaveBeenCalled();
     });
 
     it("requires agent-level configure rights to manage someone else's agent", async () => {

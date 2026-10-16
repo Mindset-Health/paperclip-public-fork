@@ -6,11 +6,13 @@ import { companies, companySecrets, createDb, environments } from "@paperclipai/
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import {
   AGENT_CREATOR_METADATA_KEY,
+  assertValidDixieSlackMetadata,
   memberAgentPolicy,
   memberRestrictionsEnabled,
   readMemberAgentPolicyConfig,
 } from "../services/member-agent-policy.js";
 import { HttpError } from "../errors.js";
+import { redactEventPayload } from "../redaction.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describeDatabase = support.supported ? describe : describe.skip;
@@ -66,6 +68,39 @@ describe("readMemberAgentPolicyConfig", () => {
       { id: "claude-sonnet-4-6" },
       { id: "google/gemini-2.5-pro", adapterConfig: { provider: "vertex" } },
     ]);
+  });
+});
+
+describe("metadata.dixieSlack", () => {
+  const valid = { mode: "keywords", channels: ["C0123ABCD"], keywords: ["deploy", "incident"] };
+
+  it("accepts every mode with valid fields and ignores other metadata", () => {
+    expect(() => assertValidDixieSlackMetadata({ dixieSlack: valid, team: "x" })).not.toThrow();
+    expect(() => assertValidDixieSlackMetadata({ dixieSlack: { mode: "off", channels: [], keywords: [] } })).not.toThrow();
+    expect(() => assertValidDixieSlackMetadata({ dixieSlack: { mode: "invite", channels: [], keywords: [] } })).not.toThrow();
+    expect(() => assertValidDixieSlackMetadata({ dixieSlack: { mode: "mention", channels: ["C1"] } })).not.toThrow();
+    expect(() => assertValidDixieSlackMetadata({ team: "x" })).not.toThrow();
+    expect(() => assertValidDixieSlackMetadata(null)).not.toThrow();
+  });
+
+  it("rejects bad modes, missing channels and keyword guardrail violations", () => {
+    for (const bad of [
+      "keywords",
+      { mode: "all", channels: ["C1"] },
+      { mode: "mention", channels: [] },
+      { mode: "keywords", channels: ["C1"], keywords: [] },
+      { mode: "keywords", channels: ["C1"], keywords: ["ops"] },
+      { mode: "keywords", channels: ["C1"], keywords: Array.from({ length: 11 }, (_, i) => `word${i}`) },
+      { mode: "invite", channels: [1] },
+      { mode: "invite", channels: [], everyMessage: true },
+    ]) {
+      expect(() => assertValidDixieSlackMetadata({ dixieSlack: bad }), JSON.stringify(bad)).toThrow(HttpError);
+    }
+  });
+
+  it("survives the redaction applied to hire approval payloads", () => {
+    const metadata = { dixieSlack: valid, [AGENT_CREATOR_METADATA_KEY]: MEMBER_ID };
+    expect(redactEventPayload(metadata)).toEqual(metadata);
   });
 });
 

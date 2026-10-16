@@ -56,6 +56,52 @@ const INSTRUCTIONS_BUNDLE_KEYS = [
   "agentsMdPath",
 ] as const;
 
+/**
+ * Agent metadata key the Dixie plugin reads Slack behaviour from. Any actor
+ * that may write the agent's metadata (including members on agents they
+ * create) may set it; the shape and guardrails are enforced here so a member
+ * cannot bypass the wizard's client-side checks.
+ */
+export const DIXIE_SLACK_METADATA_KEY = "dixieSlack";
+const DIXIE_SLACK_MODES = new Set(["off", "mention", "keywords", "invite"]);
+const DIXIE_SLACK_MAX_KEYWORDS = 10;
+const DIXIE_SLACK_MIN_KEYWORD_LENGTH = 4;
+const DIXIE_SLACK_MAX_CHANNELS = 100;
+
+function stringList(value: unknown): string[] | null {
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) return null;
+  return value as string[];
+}
+
+/** Rejects a malformed `metadata.dixieSlack`; leaves other metadata alone. */
+export function assertValidDixieSlackMetadata(metadata: unknown): void {
+  if (!isPlainRecord(metadata) || !hasOwn(metadata, DIXIE_SLACK_METADATA_KEY)) return;
+  const value = metadata[DIXIE_SLACK_METADATA_KEY];
+  if (value === null) return;
+  const invalid = (detail: string) =>
+    unprocessable(`metadata.${DIXIE_SLACK_METADATA_KEY} ${detail}`, { code: "invalid_dixie_slack" });
+  if (!isPlainRecord(value)) throw invalid("must be an object");
+  const unknownKeys = Object.keys(value).filter((key) => !["mode", "channels", "keywords"].includes(key));
+  if (unknownKeys.length > 0) throw invalid(`has unknown keys: ${unknownKeys.join(", ")}`);
+  if (typeof value.mode !== "string" || !DIXIE_SLACK_MODES.has(value.mode)) {
+    throw invalid("mode must be one of off, mention, keywords, invite");
+  }
+  const channels = value.channels === undefined ? [] : stringList(value.channels);
+  if (!channels || channels.length > DIXIE_SLACK_MAX_CHANNELS || channels.some((id) => !id.trim())) {
+    throw invalid(`channels must be a list of at most ${DIXIE_SLACK_MAX_CHANNELS} channel IDs`);
+  }
+  const keywords = value.keywords === undefined ? [] : stringList(value.keywords);
+  if (!keywords) throw invalid("keywords must be a list of strings");
+  if ((value.mode === "mention" || value.mode === "keywords") && channels.length === 0) {
+    throw invalid(`needs at least one channel in ${value.mode} mode`);
+  }
+  if (value.mode === "keywords" && keywords.length === 0) throw invalid("needs at least one keyword in keywords mode");
+  if (keywords.length > DIXIE_SLACK_MAX_KEYWORDS) throw invalid(`allows at most ${DIXIE_SLACK_MAX_KEYWORDS} keywords`);
+  if (keywords.some((keyword) => keyword.trim().length < DIXIE_SLACK_MIN_KEYWORD_LENGTH)) {
+    throw invalid(`keywords need at least ${DIXIE_SLACK_MIN_KEYWORD_LENGTH} characters each`);
+  }
+}
+
 export type MemberModelEntry = {
   id: string;
   label?: string;
@@ -298,6 +344,7 @@ export function memberAgentPolicy(
       } | null;
     },
   ): Promise<void> {
+    if (input.mode !== "test") assertValidDixieSlackMetadata(input.body.metadata);
     if (!(await isRestricted(req, input.companyId))) return;
     const { body, mode, existing } = input;
 
