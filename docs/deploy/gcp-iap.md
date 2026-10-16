@@ -39,6 +39,7 @@ IAP mode requires `PAPERCLIP_DEPLOYMENT_MODE=authenticated` (the production imag
 | `PAPERCLIP_IAP_AUDIENCE` | yes | `/projects/123456789/locations/us-central1/services/dixie-console` | The expected `aud` claim. For Cloud Run IAP use `/projects/<PROJECT_NUMBER>/locations/<REGION>/services/<SERVICE>`; for a load balancer backend use `/projects/<PROJECT_NUMBER>/global/backendServices/<ID>`. |
 | `PAPERCLIP_IAP_ALLOWED_DOMAIN` | yes | `mindsethealth.com` | Only emails in this Google Workspace domain can sign in. |
 | `PAPERCLIP_IAP_ADMIN_EMAILS` | no | `simon.raik-allen@mindsethealth.com,ops@mindsethealth.com` | Comma-separated emails that become instance admins when they sign in. |
+| `PAPERCLIP_IAP_MEMBER_GRANTS` | no | `agents:create,tasks:assign` | Comma-separated permission keys granted explicitly to every non-admin `operator` member. Unknown keys stop the server from starting. |
 | `PAPERCLIP_IAP_JWKS_URL` | no | | Overrides the key URL, for tests only. |
 | `PAPERCLIP_IAP_CLOCK_TOLERANCE_SECONDS` | no | `30` | Clock skew allowed for `exp` and `iat`. |
 
@@ -63,6 +64,11 @@ IAP mode replaces the board-claim flow. No claim URL is printed at startup.
   change or a suspension made in the UI stays in place. Companies that are created
   later are added at the user's next session (sessions last 7 days, or sign out and
   sign in again).
+- With `PAPERCLIP_IAP_MEMBER_GRANTS`, each new session also gives a non-admin member
+  those explicit grants in every company where they are an active `operator`. This
+  backfills existing members at their next session. Viewers, suspended members,
+  owners and admins are not changed. Removing a key from the variable does not
+  revoke grants that were already given. Revoke them in the UI.
 
 ## Sign-out
 
@@ -122,3 +128,75 @@ safe. Each run creates a new key. Revoke old keys with
 Use the key as `Authorization: Bearer <token>` against the REST API. Bearer requests
 skip IAP session handling. They still must reach the server, so call it from inside
 the network or through a path that IAP allows for service accounts.
+
+## Member agents and connections
+
+Use these variables to let every employee create agents while administrators keep
+control of runtimes, models, credentials, environments and connections. They work
+in any authentication mode, but they are designed for IAP mode. All of them are
+off by default, and the server then behaves like upstream Paperclip.
+
+A *member* is a signed-in board user who does not have a company-wide
+`agents:configure` grant. Owners, admins, instance admins and the local implicit
+board are never restricted. Agent API keys are not changed.
+
+| Variable | Example | Meaning |
+| --- | --- | --- |
+| `PAPERCLIP_AGENT_CREATOR_CAN_CONFIGURE` | `true` | The server records who created each new agent (`metadata.createdByUserId`, always taken from the signed-in user). The creator can then configure, edit instructions for, pause, resume, terminate and delete that agent. The creator cannot change other people's agents: when this is on, the agent-scoped routes (pause, resume, terminate, delete, keys, permissions, runtime state, Claude login) also need configure rights on that agent, not only `agents:create`. |
+| `PAPERCLIP_MEMBER_ADAPTER_ALLOWLIST` | `dixie_hermes,claude_local,codex_local,gemini_local,opencode_local` | Runtimes that members can create, update and test. Other runtimes (for example `process`, `http`, `hermes_local`, `openclaw_gateway`) are rejected with `member_adapter_not_allowed`, and the adapter pickers do not show them to members. |
+| `PAPERCLIP_MEMBER_DEFAULT_ENVIRONMENT_NAME` | `Runner runner-1` | Members' local CLI agents (`*_local`) always use this environment. Any other environment is rejected. The Local environment is rejected for every runtime. If the environment is missing, inactive or uses the `local` driver, member requests fail with an error instead of falling back. |
+| `PAPERCLIP_MEMBER_ADAPTER_DEFAULTS` | see below | JSON map of runtime to an `adapterConfig` fragment. Members can set only the allowed keys (next row). Everything else, including `env`, commands, URLs and providers, comes from this fragment. A binding `{"type":"secret_ref","secretKey":"anthropic_api_key"}` resolves to the company secret with that key. |
+| `PAPERCLIP_MEMBER_MODEL_ALLOWLIST` | see below | JSON map of runtime to approved models. An entry is a model id or `{"id": "...", "label": "...", "adapterConfig": {...}}`. The entry's `adapterConfig` is applied when a member chooses that model, so an administrator can set the provider for each model. Other models are rejected with `member_model_not_allowed`, and the model picker lists only these. If a member does not choose a model, the default model or the first entry is used. |
+| `PAPERCLIP_MEMBER_ADAPTER_CONFIG_KEYS` | `model,effort,modelReasoningEffort,toolsets` | The `adapterConfig` keys that members can set. The default is `model`, `effort`, `thinkingEffort`, `modelReasoningEffort`, `reasoningEffort`, `variant`, `fastMode`, `search`, `toolsets`, `capabilities`, `description`, `instructions`, `systemPrompt` and `appendSystemPrompt`. The server drops any other key. |
+| `PAPERCLIP_CONNECTIONS_ADMIN_ONLY` | `true` | Only connection managers (`tools:manage_connections`, which owners and admins have) can create connections, including personal "Just me" connections, authorize a personal grant, or delegate a personal grant to an agent. The server rejects these requests from members with `connections_admin_only`, and the UI hides "Just me". Members can still view connections and ask for agent access. Existing organization and agent grants do not change. |
+
+The server enforces all of these rules on agent create, hire, update and adapter
+test requests. The UI only hides choices that the server would reject. Members
+cannot choose an AI connection or send test credentials, and they cannot install
+team catalogs or built-in agents, because those bring their own runtimes.
+Malformed JSON in these variables stops the server from starting.
+
+Example for Claude Code (which needs the CLI engine and an API key from a company
+secret) and Hermes (where each model has its own provider):
+
+```sh
+PAPERCLIP_MEMBER_ADAPTER_DEFAULTS='{
+  "claude_local": {"engine": "cli", "dangerouslySkipPermissions": true,
+                   "env": {"ANTHROPIC_API_KEY": {"type": "secret_ref", "secretKey": "anthropic_api_key"}}},
+  "codex_local": {"dangerouslyBypassApprovalsAndSandbox": true,
+                  "env": {"OPENAI_API_KEY": {"type": "secret_ref", "secretKey": "openai_api_key"}}}
+}'
+PAPERCLIP_MEMBER_MODEL_ALLOWLIST='{
+  "dixie_hermes": [
+    {"id": "claude-sonnet-4-6", "label": "Claude Sonnet 4.6", "adapterConfig": {"provider": "anthropic"}},
+    {"id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash", "adapterConfig": {"provider": "vertex"}},
+    {"id": "google/gemini-2.5-pro", "label": "Gemini 2.5 Pro", "adapterConfig": {"provider": "vertex"}}
+  ]
+}'
+```
+
+### Default action permissions for connections
+
+Paperclip already has a company-wide default for connection actions: a tool policy.
+To allow read-only actions and ask first for every action that makes changes,
+create one `require_approval` policy with a write-risk condition (as a company
+owner or admin, with a board API key):
+
+```sh
+curl -X POST "$PAPERCLIP_URL/api/companies/$COMPANY_ID/tools/policies" \
+  -H "Authorization: Bearer $BOARD_API_KEY" -H "Content-Type: application/json" \
+  -d '{"name": "Ask first for changes", "policyType": "require_approval", "priority": 1000,
+       "selectors": {}, "conditions": {"risk": {"isWrite": true}}}'
+```
+
+Policies are checked in ascending `priority` order before each connection's own
+permission choices. With priority 1000, an `allow` policy or a remembered "always
+allow" trust rule with a lower priority number still takes effect first. Actions
+with risk `write`, `destructive`, `medium`, `high` or `critical` then need a person
+to approve them, and `read` and `low` actions follow the connection's own
+permissions.
+
+This policy is checked before the connection's agent permissions. A write action
+from an agent that the connection does not permit therefore asks for approval
+instead of being denied, so approvers should check which agent is asking.
+

@@ -189,6 +189,26 @@ See [Google Cloud IAP](/deploy/gcp-iap) for the full behavior.
 | `PAPERCLIP_IAP_AUDIENCE` | (unset) | Required in IAP mode. Expected `aud` claim of the IAP JWT |
 | `PAPERCLIP_IAP_ALLOWED_DOMAIN` | (unset) | Required in IAP mode. Google Workspace domain whose users may sign in |
 | `PAPERCLIP_IAP_ADMIN_EMAILS` | (unset) | Comma-separated emails that become instance admins at sign-in |
+| `PAPERCLIP_IAP_MEMBER_GRANTS` | (unset) | Comma-separated permission keys (for example `agents:create`) granted explicitly to non-admin `operator` members at each new session. Unknown keys refuse startup |
+
+## Member agent and connection policy
+
+These variables let ordinary members create agents while administrators keep
+control of runtimes, models, credentials, environments and connections. All are
+off by default. "Member" means a board user without a company-wide
+`agents:configure` grant (owners, admins and instance admins are never
+restricted). See [Google Cloud IAP](/deploy/gcp-iap#member-agents-and-connections)
+for the full behavior and an example.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PAPERCLIP_AGENT_CREATOR_CAN_CONFIGURE` | `false` | Records the creating user on new agents (`metadata.createdByUserId`) and lets them configure, pause, resume, terminate and delete their own agents. Agent-scoped management routes then also require configure rights on that agent |
+| `PAPERCLIP_MEMBER_ADAPTER_ALLOWLIST` | (unset) | Comma-separated adapter types members may create, update or test. Others are rejected and hidden from the member's adapter picker |
+| `PAPERCLIP_MEMBER_DEFAULT_ENVIRONMENT_NAME` | (unset) | Name of the execution environment that members' local CLI agents (`*_local`) are pinned to. Any other environment, and the Local environment for every runtime, is rejected |
+| `PAPERCLIP_MEMBER_ADAPTER_DEFAULTS` | (unset) | JSON map of adapter type to an `adapterConfig` fragment. Merged under the member's allowed keys; credentials, commands and URLs come only from here. `{"type":"secret_ref","secretKey":"<key>"}` resolves to the company secret with that key. Malformed JSON refuses startup |
+| `PAPERCLIP_MEMBER_MODEL_ALLOWLIST` | (unset) | JSON map of adapter type to approved models: ids, or `{"id","label","adapterConfig"}` objects whose `adapterConfig` is applied when that model is chosen. Members' model pickers list only these |
+| `PAPERCLIP_MEMBER_ADAPTER_CONFIG_KEYS` | model, effort and prompt keys | Comma-separated `adapterConfig` keys members may set. Other keys are dropped |
+| `PAPERCLIP_CONNECTIONS_ADMIN_ONLY` | `false` | Creating connections (including personal "Just me" connections), authorizing personal grants and delegating them to agents require connection-manager rights; the "Just me" option is hidden from members |
 
 ## Secrets
 
