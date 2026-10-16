@@ -446,7 +446,14 @@ export const OAUTH_CLIENT_ID_METADATA_DOCUMENT_PATH =
 export async function resolveOAuthClientIdMetadataDocumentUrl(
   redirectUri: string,
   lookup?: RemoteHttpEndpointLookup,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | null> {
+  // Deployments behind an identity-aware proxy (for example Cloud Run IAP) can
+  // reach authorization servers but cannot let them fetch this document, so
+  // CIMD would fail with invalid_client. Opting out falls back to DCR.
+  if (env.PAPERCLIP_OAUTH_CLIENT_ID_METADATA_DOCUMENT?.trim().toLowerCase() === "disabled") {
+    return null;
+  }
   try {
     const parsed = new URL(redirectUri);
     if (parsed.protocol !== "https:") return null;

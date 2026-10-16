@@ -307,7 +307,9 @@ For standard OAuth methods, Paperclip resolves a client in this order:
 
 1. Deployment-preconfigured provider client.
 2. Client ID Metadata Document (CIMD), when advertised and the instance has a
-   public HTTPS URL.
+   public HTTPS URL. Authorization servers fetch the document from outside, so
+   a deployment behind an identity-aware proxy (such as Cloud Run IAP) sets
+   `PAPERCLIP_OAUTH_CLIENT_ID_METADATA_DOCUMENT=disabled` to skip this tier.
 3. Dynamic client registration (DCR/RFC 7591), when advertised and allowed by
    the curated method.
 4. A customer-created client ID and secret supplied through setup.

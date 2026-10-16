@@ -22,6 +22,14 @@ describe("OAuth Client ID Metadata Document selection", () => {
     )).resolves.toBeNull();
   });
 
+  it("falls back to DCR when the deployment disables CIMD", async () => {
+    await expect(resolveOAuthClientIdMetadataDocumentUrl(
+      "https://paperclip.example/api/tools/oauth/callback",
+      async () => [{ address: "93.184.216.34", family: 4 }],
+      { PAPERCLIP_OAUTH_CLIENT_ID_METADATA_DOCUMENT: "disabled" },
+    )).resolves.toBeNull();
+  });
+
   it.each([
     "http://localhost:3100/api/tools/oauth/callback",
     "https://127.0.0.1:3100/api/tools/oauth/callback",
