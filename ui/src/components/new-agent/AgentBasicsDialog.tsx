@@ -8,6 +8,7 @@ import { adaptersApi } from "@/api/adapters";
 import { instanceSettingsApi } from "@/api/instanceSettings";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { isNewAgentAdapterAllowed } from "@/lib/new-agent-adapters";
+import { memberMayUseAdapter, useMemberAgentPolicy } from "@/hooks/useMemberAgentPolicy";
 import { queryKeys } from "@/lib/queryKeys";
 import { getAdapterDisplay } from "@/adapters/adapter-display-registry";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,8 @@ export function AgentBasicsDialog({
 }) {
   const id = useId();
   const cloud = Boolean(useCloudInstance());
+  const { selectedCompanyId } = useCompany();
+  const { policy: memberPolicy } = useMemberAgentPolicy(open ? selectedCompanyId : null);
   const experimental = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,
     queryFn: instanceSettingsApi.getExperimental,
@@ -130,7 +133,8 @@ export function AgentBasicsDialog({
         nativeRunnerEnabled: experimental.data?.enableNativeRunner === true,
       }) &&
       !["process", "http"].includes(adapter.type) &&
-      !getAdapterDisplay(adapter.type).comingSoon,
+      !getAdapterDisplay(adapter.type).comingSoon &&
+      memberMayUseAdapter(memberPolicy, adapter.type),
   );
   const validAdapter = choices.some((adapter) => adapter.type === adapterType);
   return (

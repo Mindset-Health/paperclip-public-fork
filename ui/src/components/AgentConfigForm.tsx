@@ -88,6 +88,7 @@ import { useProposalReview } from "../pages/secrets/proposal-review";
 import { AGENT_ACCESS_CONFIG_PATH_PREFIX } from "../lib/secret-delivery";
 import { shouldShowLegacyWorkingDirectoryField } from "../lib/legacy-agent-config";
 import { listAdapterOptions, listVisibleAdapterTypes } from "../adapters/metadata";
+import { memberMayUseAdapter, useMemberAgentPolicy } from "../hooks/useMemberAgentPolicy";
 import { getAdapterDisplay, getAdapterLabel } from "../adapters/adapter-display-registry";
 import { useDisabledAdaptersSync } from "../adapters/use-disabled-adapters";
 import { buildAgentUpdatePatch, omitUndefinedEntries, type AgentConfigOverlay } from "../lib/agent-config-patch";
@@ -394,8 +395,13 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     queryFn: () => instanceSettingsApi.getExperimental(),
     retry: false,
   });
+  const { policy: memberAgentPolicy } = useMemberAgentPolicy(selectedCompanyId);
   const adapterPickerDisabledTypes = useMemo(() => {
     const next = new Set(disabledTypes);
+    // Restricted members only see the runtimes an administrator approved.
+    for (const option of listAdapterOptions((type) => type)) {
+      if (!memberMayUseAdapter(memberAgentPolicy, option.value)) next.add(option.value);
+    }
     // Fail closed while settings load. Existing native agents still render
     // their current value in edit mode, but the picker does not offer a fresh
     // native selection until the explicit experimental opt-in is known true.
@@ -403,7 +409,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       next.add("paperclip_runner");
     }
     return next;
-  }, [disabledTypes, experimentalSettings?.enableNativeRunner]);
+  }, [disabledTypes, experimentalSettings?.enableNativeRunner, memberAgentPolicy]);
   const environmentsEnabled = experimentalSettings?.enableEnvironments === true;
   // Managed-sandbox-only policy: every agent runs in the platform-managed
   // environment, so the form hides each host filesystem path and each

@@ -12,6 +12,7 @@ import {
 import { testAgentSetup } from "@/lib/test-agent-setup";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { isNewAgentAdapterAllowed } from "@/lib/new-agent-adapters";
+import { useMemberAgentPolicy } from "@/hooks/useMemberAgentPolicy";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, MotionConfig } from "motion/react";
@@ -110,6 +111,12 @@ function Setup({
   const cache = useQueryClient();
   const { openNewIssue } = useDialogActions();
   const appearanceDraft = useAgentAppearanceDraft(`${companyId}:new-agent`);
+  // Restricted members get admin-managed credentials and environments: no
+  // connect step, credential fields, AI connection or environment choice.
+  const { policy: memberPolicy } = useMemberAgentPolicy(companyId);
+  const managed = memberPolicy.restricted;
+  const memberEnvironmentId =
+    managed && adapterType.endsWith("_local") ? memberPolicy.localEnvironmentId : null;
   const isRunner = adapterType === "paperclip_runner";
   const brandType = isRunner
     ? runnerProvider === "grok"
@@ -121,7 +128,7 @@ function Setup({
         : "codex_local"
     : adapterType;
   const connectionAdapter =
-    brandType === "claude_local" || brandType === "codex_local" || brandType === "grok_local"
+    !managed && (brandType === "claude_local" || brandType === "codex_local" || brandType === "grok_local")
       ? brandType
       : null;
   const multiProvider =
@@ -129,7 +136,7 @@ function Setup({
   const providerKeys = setupProviderKeys(brandType);
   const chooseProvider = multiProvider || brandType === "hermes_local";
   const hasCredentialField =
-    chooseProvider || Boolean(SETUP_CREDENTIAL_KEYS[adapterType]);
+    !managed && (chooseProvider || Boolean(SETUP_CREDENTIAL_KEYS[adapterType]));
   const showModel = !["cursor_cloud", "hermes_gateway"].includes(adapterType);
   const [gatewayUrl, setGatewayUrl] = useState("");
   const [kimiModel, setKimiModel] = useState("");
@@ -154,7 +161,10 @@ function Setup({
       : undefined,
   );
   const [connection, setConnection] = useState<ProviderConnection | null>(null);
-  const aiBinding = runtimeAiBinding ?? connection?.aiConnection;
+  const aiBinding = managed ? undefined : (runtimeAiBinding ?? connection?.aiConnection);
+  useEffect(() => {
+    if (managed && screen === "connect") setScreen("runtime");
+  }, [managed, screen]);
   const [repository, setRepository] = useState("");
   const [branch, setBranch] = useState("");
   const [createdInSession, setCreated] = useState<Agent | null>(null);
@@ -243,7 +253,7 @@ function Setup({
     environmentId = forced.forced
       ? (forced.kubernetesEnvironment?.id ?? null)
       : resolveAdapterTestEnvironmentId({
-          agentDefaultEnvironmentId: environmentOverride || null,
+          agentDefaultEnvironmentId: memberEnvironmentId ?? (environmentOverride || null),
           instanceDefaultEnvironmentId:
             settings.data?.defaultEnvironmentId ?? null,
           localDefaultEnvironmentId: resolveLocalDefaultEnvironmentId(
@@ -437,7 +447,7 @@ function Setup({
         providerAdapter: brandType,
         adapterConfig: config,
         testCredentials: pendingCredentials(nextConnection),
-        aiConnection: runtimeAiBinding ?? nextConnection?.aiConnection,
+        aiConnection: managed ? undefined : (runtimeAiBinding ?? nextConnection?.aiConnection),
         environmentId,
       });
       if (run !== generation.current) return false;
@@ -508,8 +518,9 @@ function Setup({
         adapterType,
         adapterConfig: config,
         defaultEnvironmentId:
-          environmentOverride ||
-          (forced.forced || managedOnly ? environmentId : null),
+          memberEnvironmentId ??
+          (environmentOverride ||
+            (forced.forced || managedOnly ? environmentId : null)),
         runtimeConfig: { ...buildNewAgentRuntimeConfig({ heartbeatEnabled: false }), ...(aiBinding ? { aiConnection: aiBinding } : {}) },
         budgetMonthlyCents: 0,
         ...(connection?.storedSessionId
@@ -834,7 +845,7 @@ function Setup({
                     <fieldset disabled={busy} className="space-y-8">
                       <section className="space-y-5">
                         <h3 className="text-sm font-semibold">Runtime</h3>
-                        {aiProviderForAdapter(brandType) && (
+                        {!managed && aiProviderForAdapter(brandType) && (
                           connection && !aiBinding ? (
                             <div className="space-y-3">
                               <p className="text-sm text-muted-foreground">
@@ -1121,7 +1132,7 @@ function Setup({
                           </div>
                         )}
                       </section>
-                      {!["cursor_cloud", "hermes_gateway"].includes(
+                      {!managed && !["cursor_cloud", "hermes_gateway"].includes(
                         adapterType,
                       ) && (
                         <section className="space-y-5">
