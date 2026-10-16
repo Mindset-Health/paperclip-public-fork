@@ -76,6 +76,10 @@ content invalidation. Private-source bindings, membership, and privacy changes
 invalidate only agents assigned skills from the affected sources. Company policy
 changes conservatively invalidate the company.
 Source retry/lease bookkeeping and skill popularity counters do not emit changes.
+Multi-skill source publication defers its skill invalidation until transaction
+commit, after it acquires all skill rows. This avoids an agent-lock/skill-lock
+cycle with concurrent version saves. Individual file edits retain immediate
+journaling and their existing filesystem rollback behavior.
 
 Assignment edits already use the configuration boundary. The runtime reader
 returns selected skill entries with host source paths and immutable version IDs.

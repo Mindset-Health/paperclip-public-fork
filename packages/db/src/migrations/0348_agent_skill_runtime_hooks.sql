@@ -123,7 +123,8 @@ END;
 $$;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS paperclip_skill_runtime_changed ON company_skills;
-CREATE TRIGGER paperclip_skill_runtime_changed AFTER INSERT OR UPDATE OR DELETE ON company_skills
+CREATE CONSTRAINT TRIGGER paperclip_skill_runtime_changed AFTER INSERT OR UPDATE OR DELETE ON company_skills
+  DEFERRABLE INITIALLY IMMEDIATE
   FOR EACH ROW EXECUTE FUNCTION paperclip_skill_runtime_changed();
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS paperclip_skill_policy_runtime_changed ON company_skill_policies;
