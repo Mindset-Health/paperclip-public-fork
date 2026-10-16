@@ -73,7 +73,8 @@ companion files, versions, source bindings, or identities change. Rename checks
 both old and new keys. String selections, structured selections, and supported
 legacy aliases are recognized. Unrelated agents and other companies receive no
 content invalidation. Private-source bindings, membership, and privacy changes
-invalidate only agents assigned skills from the affected sources. Company policy
+invalidate only agents assigned skills from the affected sources. Project workspace
+authorization-policy changes use the same boundary. Company policy
 changes conservatively invalidate the company.
 Source retry/lease bookkeeping and skill popularity counters do not emit changes.
 Multi-skill source publication defers its skill invalidation until transaction

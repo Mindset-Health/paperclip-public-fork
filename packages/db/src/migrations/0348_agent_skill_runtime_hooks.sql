@@ -146,7 +146,7 @@ CREATE TRIGGER paperclip_project_access_runtime_changed AFTER INSERT OR UPDATE O
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS paperclip_project_privacy_runtime_changed ON projects;
 CREATE TRIGGER paperclip_project_privacy_runtime_changed AFTER UPDATE ON projects
-  FOR EACH ROW EXECUTE FUNCTION paperclip_skill_access_runtime_changed('visibility', 'privacy_owner_user_id', 'personal_owner_user_id');
+  FOR EACH ROW EXECUTE FUNCTION paperclip_skill_access_runtime_changed('visibility', 'privacy_owner_user_id', 'personal_owner_user_id', 'execution_workspace_policy');
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION paperclip_skill_pins_runtime_changed() RETURNS trigger
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
