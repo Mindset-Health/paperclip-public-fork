@@ -33,6 +33,8 @@ export type HealthStatus = {
   deploymentMode?: "local_trusted" | "authenticated";
   deploymentExposure?: "private" | "public";
   localAiLoginSupported?: boolean;
+  /** Dixie: "gcp-iap" when browser identity comes from Google Cloud IAP. */
+  authProvider?: "better-auth" | "gcp-iap";
   authReady?: boolean;
   bootstrapStatus?: "ready" | "bootstrap_pending";
   bootstrapInviteActive?: boolean;

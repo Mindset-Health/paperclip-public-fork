@@ -179,6 +179,17 @@ Unknown field names are logged and ignored (mixed-version fleet safe).
 Malformed JSON or an invalid value for a known field refuses startup — policy
 configuration fails closed.
 
+## Google Cloud IAP authentication
+
+See [Google Cloud IAP](/deploy/gcp-iap) for the full behavior.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PAPERCLIP_AUTH_PROVIDER` | (unset) | Set to `gcp-iap` to take browser identity from the IAP assertion header and turn off password sign-in |
+| `PAPERCLIP_IAP_AUDIENCE` | (unset) | Required in IAP mode. Expected `aud` claim of the IAP JWT |
+| `PAPERCLIP_IAP_ALLOWED_DOMAIN` | (unset) | Required in IAP mode. Google Workspace domain whose users may sign in |
+| `PAPERCLIP_IAP_ADMIN_EMAILS` | (unset) | Comma-separated emails that become instance admins at sign-in |
+
 ## Secrets
 
 | Variable | Default | Description |

@@ -740,11 +740,22 @@ async function startServerWithDatabaseTeardown(
       },
       "Authenticated mode auth origin configuration",
     );
-    const auth = createBetterAuthInstance(db as any, config, effectiveTrustedOrigins);
+    // Dixie: optional Google Cloud IAP trusted-identity mode (see auth/gcp-iap.ts).
+    const gcpIap = await (await import("./auth/gcp-iap-setup.js")).setupGcpIapAuth(db as any);
+    const auth = createBetterAuthInstance(
+      db as any,
+      config,
+      effectiveTrustedOrigins,
+      ...(gcpIap ? [{ gcpIap: gcpIap.options }] : []),
+    );
     betterAuthHandler = createBetterAuthHandler(auth);
     resolveSession = (req) => resolveBetterAuthSession(auth, req);
     resolveSessionFromHeaders = (headers) => resolveBetterAuthSessionFromHeaders(auth, headers);
-    await initializeBoardClaimChallenge(db as any, { deploymentMode: config.deploymentMode });
+    if (gcpIap) {
+      ({ resolveSession, resolveSessionFromHeaders } = gcpIap.wrap(auth, resolveSessionFromHeaders));
+    } else {
+      await initializeBoardClaimChallenge(db as any, { deploymentMode: config.deploymentMode });
+    }
     authReady = true;
   }
 

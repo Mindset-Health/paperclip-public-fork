@@ -22,6 +22,7 @@ import {
   resolveWorkspaceHandoffLocalKey,
   resolveWorkspaceHandoffLocalWorkspaceId,
 } from "./workspace-login-handoff.js";
+import { gcpIapPlugin, type GcpIapConfig, type GcpIapVerifier } from "./gcp-iap.js";
 
 export type BetterAuthSessionUser = {
   id: string;
@@ -238,7 +239,12 @@ export function resolveWorkspaceHandoffIdentity(
   };
 }
 
-export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins: string[]): BetterAuthInstance {
+export function createBetterAuthInstance(
+  db: Db,
+  config: Config,
+  trustedOrigins: string[],
+  opts: { gcpIap?: { config: GcpIapConfig; verify: GcpIapVerifier } } = {},
+): BetterAuthInstance {
   const baseUrl = config.authBaseUrlMode === "explicit" ? config.authPublicBaseUrl : undefined;
   const publicUrl = process.env.PAPERCLIP_PUBLIC_URL?.trim() || baseUrl;
   const managedRuntimePublicUrl = process.env.PAPERCLIP_MANAGED_RUNTIME_PUBLIC_URL?.trim() || undefined;
@@ -271,7 +277,8 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       },
     }),
     emailAndPassword: {
-      enabled: true,
+      // Dixie: IAP is the only browser identity source in gcp-iap mode.
+      enabled: !opts.gcpIap,
       requireEmailVerification: false,
       disableSignUp: config.authDisableSignUp,
     },
@@ -284,10 +291,11 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     // Registered only for a managed workspace instance: the plugin is what makes
     // `Open workspace` password-independent, and a control-plane instance that
     // was never handed a workspace key must not expose the exchange at all.
-    ...(resolveWorkspaceHandoffIdentity(config)
+    ...(resolveWorkspaceHandoffIdentity(config) || opts.gcpIap
       ? {
           plugins: [
-            workspaceLoginHandoffPlugin({
+            ...(opts.gcpIap ? [gcpIapPlugin({ db, ...opts.gcpIap })] : []),
+            ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({
               db,
               // Re-resolved per exchange so a hot restart cannot keep validating
               // against an origin the control plane has since republished.
@@ -299,7 +307,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
                   companyId: null,
                   origin: null,
                 },
-            }),
+            })] : []),
           ],
         }
       : {}),

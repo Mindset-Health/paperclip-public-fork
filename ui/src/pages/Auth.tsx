@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "@/lib/router";
 import { authApi } from "../api/auth";
 import { healthApi } from "../api/health";
 import { CloudSignIn } from "@/components/CloudSignIn";
+import { GcpIapSignIn } from "@/components/GcpIapSignIn";
 import { clearCloudSignInAttempt } from "@/lib/cloud-sign-in";
 import { tenantSignInReturnPath } from "@/lib/cloudLinks";
 import { queryKeys } from "../lib/queryKeys";
@@ -93,6 +94,10 @@ export function AuthPage() {
   // A health/session failure must not be mistaken for a self-hosted instance.
   if (healthQuery.error || sessionError) {
     return <p role="alert" className="p-6 text-sm text-destructive">Unable to check sign-in. Refresh and try again.</p>;
+  }
+
+  if (healthQuery.data?.authProvider === "gcp-iap") {
+    return <GcpIapSignIn returnTo={nextPath} />;
   }
 
   if (healthQuery.data?.cloud) {
