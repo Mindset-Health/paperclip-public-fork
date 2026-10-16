@@ -20,6 +20,7 @@ const config: GcpIapConfig = {
   audience: AUDIENCE,
   allowedDomain: "mindsethealth.com",
   adminEmails: new Set(["admin@mindsethealth.com"]),
+  memberGrants: [],
   jwksUrl: "https://example.invalid/jwk",
   clockToleranceSeconds: 30,
 };
@@ -70,6 +71,21 @@ describe("GCP IAP config", () => {
     });
     expect(parsed?.allowedDomain).toBe("mindsethealth.com");
     expect([...parsed!.adminEmails]).toEqual(["admin@mindsethealth.com", "other@mindsethealth.com"]);
+  });
+
+  it("parses member grants and rejects unknown permission keys", () => {
+    const base = {
+      PAPERCLIP_AUTH_PROVIDER: "gcp-iap",
+      PAPERCLIP_IAP_AUDIENCE: AUDIENCE,
+      PAPERCLIP_IAP_ALLOWED_DOMAIN: "mindsethealth.com",
+    };
+    expect(readGcpIapConfig(base)?.memberGrants).toEqual([]);
+    expect(
+      readGcpIapConfig({ ...base, PAPERCLIP_IAP_MEMBER_GRANTS: " agents:create, tasks:assign,agents:create" })?.memberGrants,
+    ).toEqual(["agents:create", "tasks:assign"]);
+    expect(() => readGcpIapConfig({ ...base, PAPERCLIP_IAP_MEMBER_GRANTS: "agents:create,agents:everything" })).toThrow(
+      /agents:everything/,
+    );
   });
 });
 

@@ -27,6 +27,7 @@ import { createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { Session, User } from "better-auth/types";
 import type { Db } from "@paperclipai/db";
+import { PERMISSION_KEYS, type PermissionKey } from "@paperclipai/shared";
 import { logger } from "../middleware/logger.js";
 import type { BetterAuthSessionResult } from "./better-auth.js";
 import { provisionGcpIapUser } from "./gcp-iap-provisioning.js";
@@ -54,6 +55,8 @@ export type GcpIapConfig = {
   audience: string;
   allowedDomain: string;
   adminEmails: ReadonlySet<string>;
+  /** Explicit grants for non-admin members (PAPERCLIP_IAP_MEMBER_GRANTS). */
+  memberGrants: readonly PermissionKey[];
   jwksUrl: string;
   clockToleranceSeconds: number;
 };
@@ -83,11 +86,24 @@ export function readGcpIapConfig(env: NodeJS.ProcessEnv = process.env): GcpIapCo
       .map(normalizeEmail)
       .filter((value) => value.length > 0),
   );
+  const memberGrants = [
+    ...new Set(
+      (env.PAPERCLIP_IAP_MEMBER_GRANTS ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  ];
+  const unknownGrants = memberGrants.filter((key) => !(PERMISSION_KEYS as readonly string[]).includes(key));
+  if (unknownGrants.length > 0) {
+    throw new Error(`PAPERCLIP_IAP_MEMBER_GRANTS has unknown permission keys: ${unknownGrants.join(", ")}`);
+  }
   const tolerance = Number.parseInt(env.PAPERCLIP_IAP_CLOCK_TOLERANCE_SECONDS ?? "", 10);
   return {
     audience: audience!,
     allowedDomain: allowedDomain!,
     adminEmails,
+    memberGrants: memberGrants as PermissionKey[],
     jwksUrl: env.PAPERCLIP_IAP_JWKS_URL?.trim() || GCP_IAP_DEFAULT_JWKS_URL,
     clockToleranceSeconds: Number.isFinite(tolerance) && tolerance >= 0 ? tolerance : DEFAULT_CLOCK_TOLERANCE_SECONDS,
   };
@@ -334,6 +350,7 @@ export function gcpIapPlugin(deps: { db: Db; config: GcpIapConfig; verify: GcpIa
           const provisioned = await provisionGcpIapUser(deps.db, {
             email: verification.identity.email,
             isAdmin: deps.config.adminEmails.has(verification.identity.email),
+            memberGrants: deps.config.memberGrants,
           });
           const user = await ctx.context.internalAdapter.findUserById(provisioned.userId);
           if (!user) throw new Error("Provisioned IAP user not found");

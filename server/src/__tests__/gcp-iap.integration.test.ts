@@ -18,6 +18,7 @@ import {
   companyMemberships,
   createDb,
   instanceUserRoles,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -36,6 +37,7 @@ import {
   createGcpIapVerifier,
   type GcpIapConfig,
 } from "../auth/gcp-iap.js";
+import { provisionGcpIapUser } from "../auth/gcp-iap-provisioning.js";
 import type { Config } from "../config.js";
 
 const ORIGIN = "http://127.0.0.1:41998";
@@ -87,6 +89,7 @@ describeEmbeddedPostgres("GCP IAP mode against the real schema", () => {
       audience: AUDIENCE,
       allowedDomain: "mindsethealth.com",
       adminEmails: new Set(["admin@mindsethealth.com"]),
+      memberGrants: ["agents:create"],
       jwksUrl: "https://example.invalid/jwk",
       clockToleranceSeconds: 30,
     };
@@ -216,6 +219,59 @@ describeEmbeddedPostgres("GCP IAP mode against the real schema", () => {
 
     const evil = await request(app).get("/api/auth/gcp-iap/resume?next=%2F%2Fevil.example");
     expect(evil.headers.location).toBe("/");
+  });
+
+  it("applies PAPERCLIP_IAP_MEMBER_GRANTS to operators and backfills on the next session", async () => {
+    const grantKeys = async (userId: string, inCompany: string) =>
+      (
+        await db
+          .select({ key: principalPermissionGrants.permissionKey })
+          .from(principalPermissionGrants)
+          .where(and(eq(principalPermissionGrants.companyId, inCompany), eq(principalPermissionGrants.principalId, userId)))
+      )
+        .map((row) => row.key)
+        .sort();
+
+    const first = await request(app).get("/api/whoami").set(GCP_IAP_JWT_HEADER, await sign("grants.member@mindsethealth.com"));
+    const memberId = first.body.user.id as string;
+    expect(await grantKeys(memberId, companyId)).toEqual(["agents:create", "tasks:assign"]);
+
+    // A membership that predates the setting (or a company added later) is
+    // backfilled at the next session; a viewer stays without the grant.
+    const [later] = await db
+      .insert(companies)
+      .values({ name: "Later", issuePrefix: `L${randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}` })
+      .returning();
+    const [viewerCompany] = await db
+      .insert(companies)
+      .values({ name: "Viewer", issuePrefix: `V${randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}` })
+      .returning();
+    await db.insert(companyMemberships).values({
+      companyId: viewerCompany!.id,
+      principalType: "user",
+      principalId: memberId,
+      status: "active",
+      membershipRole: "viewer",
+    });
+    // The next session runs the same provisioning (called directly here to
+    // sidestep the resolver's single-flight window).
+    const again = await provisionGcpIapUser(db, {
+      email: "grants.member@mindsethealth.com",
+      isAdmin: false,
+      memberGrants: ["agents:create"],
+    });
+    expect(again).toMatchObject({ userId: memberId, created: false, membershipsCreated: 1, memberGrantsInserted: 1 });
+    expect(await grantKeys(memberId, later!.id)).toEqual(["agents:create", "tasks:assign"]);
+    expect(await grantKeys(memberId, viewerCompany!.id)).toEqual([]);
+
+    // Admins keep their owner defaults; the member grant list adds nothing for them.
+    const admin = await provisionGcpIapUser(db, {
+      email: "admin@mindsethealth.com",
+      isAdmin: true,
+      memberGrants: ["agents:create"],
+    });
+    expect(admin.memberGrantsInserted).toBe(0);
+    expect(await grantKeys(admin.userId, later!.id)).toContain("agents:configure");
   });
 
   it("rejects direct calls to the session endpoint without IAP", async () => {

@@ -11,13 +11,19 @@
  * - Every user is ensured an active membership in every existing company
  *   (admins as `owner`, everyone else as `operator`). Existing memberships are
  *   left untouched, so a role change or suspension made in the UI sticks.
+ * - Non-admin members with an active `operator` membership also receive the
+ *   explicit grants listed in PAPERCLIP_IAP_MEMBER_GRANTS (for example
+ *   `agents:create`), including existing members on their next new session.
+ *   Viewers, suspended members and owners/admins are left alone.
  */
 
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import type { PermissionKey } from "@paperclipai/shared";
 import { authUsers, companies, companyMemberships, instanceUserRoles } from "@paperclipai/db";
-import { ensureHumanRoleDefaultGrants } from "../services/principal-access-compatibility.js";
+import { ensureHumanRoleDefaultGrants, insertMissingPrincipalGrants } from "../services/principal-access-compatibility.js";
+import { normalizeHumanRole } from "../services/company-member-roles.js";
 
 const LOCAL_BOARD_USER_ID = "local-board";
 
@@ -35,11 +41,12 @@ export type GcpIapProvisionResult = {
   created: boolean;
   isInstanceAdmin: boolean;
   membershipsCreated: number;
+  memberGrantsInserted: number;
 };
 
 export async function provisionGcpIapUser(
   db: Db,
-  input: { email: string; isAdmin: boolean; now?: Date },
+  input: { email: string; isAdmin: boolean; memberGrants?: readonly PermissionKey[]; now?: Date },
 ): Promise<GcpIapProvisionResult> {
   const email = input.email.trim().toLowerCase();
   const now = input.now ?? new Date();
@@ -110,5 +117,29 @@ export async function provisionGcpIapUser(
     });
   }
 
-  return { userId, created, isInstanceAdmin, membershipsCreated };
+  let memberGrantsInserted = 0;
+  const memberGrants = input.isAdmin ? [] : (input.memberGrants ?? []);
+  if (memberGrants.length > 0) {
+    const memberships = await db
+      .select({
+        companyId: companyMemberships.companyId,
+        status: companyMemberships.status,
+        membershipRole: companyMemberships.membershipRole,
+      })
+      .from(companyMemberships)
+      .where(and(eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+    for (const membership of memberships) {
+      if (membership.status !== "active") continue;
+      if (normalizeHumanRole(membership.membershipRole, "viewer") !== "operator") continue;
+      memberGrantsInserted += await insertMissingPrincipalGrants(db, {
+        companyId: membership.companyId,
+        principalType: "user",
+        principalId: userId,
+        grants: memberGrants.map((permissionKey) => ({ permissionKey, scope: null })),
+        grantedByUserId: null,
+      });
+    }
+  }
+
+  return { userId, created, isInstanceAdmin, membershipsCreated, memberGrantsInserted };
 }
