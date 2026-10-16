@@ -235,6 +235,7 @@ import { createRequestPromiseMemo } from "../lib/request-promise-memo.js";
 import {
   assertBoard,
   assertCompanyAccess,
+  assertInstanceAdmin,
   getAccessibleResource,
   getActorInfo,
 } from "./authz.js";
@@ -17270,6 +17271,24 @@ export function issueRoutes(
     if (!(await instanceSettings.getExperimental()).enableAgentChat) throw notFound("Agent Chat is disabled");
     const conversations = await svc.listConversations(companyId, req.actor.userId);
     res.json(await filterIssuesForActor(req, conversations));
+  });
+
+  // Dixie: all agent chats in the company, for instance admins (the Dixie
+  // plugin's board key, which backs the meta agent). Not exposed to members.
+  router.get("/companies/:companyId/conversations", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    assertInstanceAdmin(req);
+    const text = (name: string) => typeof req.query[name] === "string" && (req.query[name] as string).trim()
+      ? (req.query[name] as string).trim() : undefined;
+    const limit = Math.min(Math.max(Number.parseInt(text("limit") ?? "50", 10) || 50, 1), 200);
+    const offset = Math.max(Number.parseInt(text("offset") ?? "0", 10) || 0, 0);
+    const since = text("updatedSince");
+    const updatedSince = since ? new Date(since) : undefined;
+    if (updatedSince && Number.isNaN(updatedSince.getTime())) throw badRequest("updatedSince must be an ISO 8601 timestamp");
+    res.json(await svc.listCompanyConversations(companyId, {
+      userId: text("userId"), agentId: text("agentId"), updatedSince, limit, offset,
+    }));
   });
 
   // GET stays read-only. POST resolves the single chat on explicit add or first send/upload.

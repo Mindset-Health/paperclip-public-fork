@@ -9785,6 +9785,19 @@ export function issueService(db: Db) {
       eq(issues.companyId, companyId), eq(issues.conversationUserId, userId), isNotNull(issues.conversationAgentId),
     )).orderBy(desc(issues.updatedAt), asc(issues.id)),
 
+    /**
+     * Dixie: every agent chat in the company, newest first, for the instance
+     * admin route that backs the Dixie meta agent. Owner-only writes still apply.
+     */
+    listCompanyConversations: async (companyId: string, filters: {
+      userId?: string; agentId?: string; updatedSince?: Date; limit: number; offset: number;
+    }) => db.select().from(issues).where(and(
+      eq(issues.companyId, companyId), isNotNull(issues.conversationAgentId),
+      filters.userId ? eq(issues.conversationUserId, filters.userId) : undefined,
+      filters.agentId ? eq(issues.conversationAgentId, filters.agentId) : undefined,
+      filters.updatedSince ? gt(issues.updatedAt, filters.updatedSince) : undefined,
+    )).orderBy(desc(issues.updatedAt), asc(issues.id)).limit(filters.limit).offset(filters.offset),
+
     getConversation: async (companyId: string, agentId: string, userId: string) => db.select().from(issues).where(and(
       eq(issues.companyId, companyId), eq(issues.conversationAgentId, agentId), eq(issues.conversationUserId, userId),
     )).then((rows) => rows[0] ?? null),
