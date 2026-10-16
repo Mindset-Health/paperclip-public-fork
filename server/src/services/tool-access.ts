@@ -7772,6 +7772,7 @@ export function toolAccessService(
       }));
     }
 
+    descriptors = [...new Map(descriptors.map(descriptor => [descriptor.name, descriptor])).values()];
     const existingRows = await db
       .select()
       .from(toolCatalogEntries)
@@ -18439,6 +18440,7 @@ export function toolAccessService(
               eq(connectionGrants.status, "active"),
             ),
           )
+          .for("update")
           .limit(1);
         if (!grant)
           throw forbidden(
@@ -18466,6 +18468,7 @@ export function toolAccessService(
           )
           .limit(1);
         if (existing) return existing;
+        await tx.execute(sql`SELECT paperclip_invalidate_connector_company(${connection.companyId}::uuid)`);
         const [delegation] = await tx
           .insert(connectionGrantDelegations)
           .values({
