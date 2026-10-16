@@ -33,6 +33,7 @@ import { queryKeys } from "../lib/queryKeys";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { AgentSkillsTab } from "./agent-skills/AgentSkillsTab";
 import { AgentConfigForm } from "../components/AgentConfigForm";
+import { AgentDixieSlackSection } from "../components/DixieSlackSettings";
 import { getAdapterDisplay } from "../adapters/adapter-display-registry";
 import { adapterLabels, roleLabels, help } from "../components/agent-config-primitives";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
@@ -1425,6 +1426,7 @@ export function AgentDetail() {
             hidePromptTemplate
             hideInstructionsFile
           />
+          <AgentDixieSlackSection agent={agent} companyId={resolvedCompanyId ?? undefined} />
         </div>
       )}
 

@@ -38,6 +38,10 @@ const state = vi.hoisted(() => ({
   adapters: [] as object[],
   navigate: vi.fn(),
   openNewIssue: vi.fn(),
+  slackChannels: null as Array<{ id: string; name: string }> | null,
+}));
+vi.mock("@/hooks/useDixieSlackChannels", () => ({
+  useDixieSlackChannels: () => state.slackChannels,
 }));
 const managedApi = vi.hoisted(() => ({
   list: vi.fn(async () => ({ currentUserId: "user-1", connections: [] })),
@@ -157,6 +161,7 @@ const pass = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  state.slackChannels = null;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -659,6 +664,33 @@ describe("New agent setup", () => {
     expect(container.textContent).toContain("Agent submitted for approval");
     await click("Assign Atlas a Task");
     expect(state.openNewIssue).not.toHaveBeenCalled();
+  });
+  it("keeps the upstream flow without the Dixie Slack channel list", async () => {
+    await render();
+    await fill("Model", "openrouter/anthropic/claude-sonnet-4.6");
+    expect(container.querySelector('nav[aria-label="Agent setup steps"]')?.textContent).not.toContain("Slack");
+    await click("Finish setup");
+    expect(api.hire).toHaveBeenCalledOnce();
+    expect(api.hire.mock.calls[0][1]).not.toHaveProperty("metadata");
+  });
+  it("adds a Slack step that persists metadata.dixieSlack", async () => {
+    state.slackChannels = [{ id: "C1", name: "eng" }, { id: "C2", name: "ops" }];
+    await render();
+    await fill("Model", "openrouter/anthropic/claude-sonnet-4.6");
+    expect(container.querySelector('nav[aria-label="Agent setup steps"]')?.textContent).toContain("Slack");
+    expect(container.textContent).not.toContain("Finish setup");
+    await click("Continue");
+    expect(api.hire).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("@Dixie atlas");
+    const finish = [...container.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Finish setup");
+    expect(finish?.disabled).toBe(true);
+    await act(async () => (container.querySelector('[aria-label="#ops"]') as HTMLInputElement).click());
+    await settle();
+    await click("Finish setup");
+    expect(api.hire.mock.calls[0][1].metadata).toEqual({
+      dixieSlack: { mode: "mention", channels: ["C2"], keywords: [] },
+    });
+    expect(container.textContent).toContain("Your agent is ready");
   });
   it("uses the same managed environment for connection testing and creation", async () => {
     envApi.list.mockResolvedValue([

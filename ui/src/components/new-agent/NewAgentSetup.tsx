@@ -13,6 +13,15 @@ import { testAgentSetup } from "@/lib/test-agent-setup";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { isNewAgentAdapterAllowed } from "@/lib/new-agent-adapters";
 import { useMemberAgentPolicy } from "@/hooks/useMemberAgentPolicy";
+import { useDixieSlackChannels } from "@/hooks/useDixieSlackChannels";
+import { deriveAgentUrlKey } from "@paperclipai/shared";
+import {
+  DEFAULT_DIXIE_SLACK,
+  DIXIE_SLACK_METADATA_KEY,
+  DixieSlackFields,
+  dixieSlackError,
+  dixieSlackPayload,
+} from "../DixieSlackSettings";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, MotionConfig } from "motion/react";
@@ -142,7 +151,12 @@ function Setup({
   const [kimiModel, setKimiModel] = useState("");
   const [kimiBaseUrl, setKimiBaseUrl] = useState("");
   const [kimiProtocol, setKimiProtocol] = useState("kimi");
-  const [screen, setScreen] = useState<"connect" | "runtime" | "saved">(
+  // Dixie Flatline patch: optional Slack step, shown only when the Dixie
+  // plugin returns allowed channels.
+  const slackChannels = useDixieSlackChannels(companyId);
+  const [slack, setSlack] = useState(DEFAULT_DIXIE_SLACK);
+  const slackProblem = slackChannels ? dixieSlackError(slack) : null;
+  const [screen, setScreen] = useState<"connect" | "runtime" | "slack" | "saved">(
     createdAgentId ? "saved" : connectionAdapter ? "connect" : "runtime",
   );
   const [model, setModel] = useState("");
@@ -479,7 +493,8 @@ function Setup({
       !name.trim() ||
       testState === "running" ||
       testState === "fail" ||
-      (connectionAdapter && !connection)
+      (connectionAdapter && !connection) ||
+      slackProblem
     )
       return;
     savingRef.current = true;
@@ -523,6 +538,9 @@ function Setup({
             (forced.forced || managedOnly ? environmentId : null)),
         runtimeConfig: { ...buildNewAgentRuntimeConfig({ heartbeatEnabled: false }), ...(aiBinding ? { aiConnection: aiBinding } : {}) },
         budgetMonthlyCents: 0,
+        ...(slackChannels
+          ? { metadata: { [DIXIE_SLACK_METADATA_KEY]: dixieSlackPayload(slack) } }
+          : {}),
         ...(connection?.storedSessionId
           ? { storedSessionId: connection.storedSessionId }
           : {}),
@@ -602,11 +620,13 @@ function Setup({
   const steps = [
     ...(connectionAdapter ? ["connect" as const] : []),
     "runtime" as const,
+    ...(slackChannels ? ["slack" as const] : []),
     "saved" as const,
   ];
   const labels = {
     connect: "Connect",
     runtime: "Configure",
+    slack: "Slack",
     saved: "Confirmation",
   };
   const confirmationEnvironment = created?.defaultEnvironmentId
@@ -831,12 +851,53 @@ function Setup({
                       </Button>
                     </div>
                   </div>
-                ) : (
+                ) : screen === "slack" && slackChannels ? (
                   <form
                     className="space-y-8"
                     onSubmit={(event) => {
                       event.preventDefault();
                       void finish();
+                    }}
+                  >
+                    <h2 className="text-xl font-semibold">Slack</h2>
+                    <DixieSlackFields
+                      value={slack}
+                      onChange={setSlack}
+                      channels={slackChannels}
+                      handle={deriveAgentUrlKey(name)}
+                      disabled={busy}
+                    />
+                    {slackProblem && (
+                      <p className="text-sm text-muted-foreground">{slackProblem}</p>
+                    )}
+                    {error && (
+                      <p role="alert" className="text-sm text-destructive">
+                        {error}
+                      </p>
+                    )}
+                    <div className="flex justify-between border-t border-border py-5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => setScreen("runtime")}
+                      >
+                        <ArrowLeft className="size-4" />
+                        Configure
+                      </Button>
+                      <Button type="submit" disabled={busy || Boolean(slackProblem)}>
+                        {saving ? "Creating…" : "Finish setup"}
+                        <Check className="size-4" />
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <form
+                    className="space-y-8"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (slackChannels) setScreen("slack");
+                      else void finish();
                     }}
                   >
                     <h2 className="text-xl font-semibold">
@@ -1198,8 +1259,17 @@ function Setup({
                           Boolean(connectionAdapter && !connection)
                         }
                       >
-                        {saving ? "Creating…" : "Finish setup"}
-                        <Check className="size-4" />
+                        {slackChannels ? (
+                          <>
+                            Continue
+                            <ArrowRight className="size-4" />
+                          </>
+                        ) : (
+                          <>
+                            {saving ? "Creating…" : "Finish setup"}
+                            <Check className="size-4" />
+                          </>
+                        )}
                       </Button>
                     </div>
                   </form>
