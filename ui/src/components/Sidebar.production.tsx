@@ -37,6 +37,7 @@ import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { attentionBadgeCount } from "../lib/attention";
 import { useInboxBadge } from "../hooks/useInboxBadge";
+import { useCompanyAdmin } from "../hooks/useCompanyAdmin";
 import { usePublishSharedQueryData, useSharedPollingQuery } from "../hooks/useSharedPolling";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
@@ -50,6 +51,10 @@ export function Sidebar() {
   // one policy across static nav groups and the data-driven sections.
   const [workOpen, setWorkOpen] = useState(true);
   const [companyOpen, setCompanyOpen] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(true);
+  // Employees (company members) see the work surfaces; the Admin section
+  // only appears for company owners/admins and instance admins.
+  const { isAdmin } = useCompanyAdmin();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const { collapsed, peeking } = useSidebar();
   const rail = collapsed && !peeking;
@@ -231,12 +236,17 @@ export function Sidebar() {
         <SidebarSection label="Company" collapsible={{ open: companyOpen, onOpenChange: setCompanyOpen }}>
           <SidebarNavItem to="/org" label="Org" icon={Network} />
           {showApps ? <SidebarNavItem to="/apps" label="Connectors" icon={Unplug} /> : null}
-          <SidebarNavItem to="/timeline" label="Timeline" icon={GanttChartSquare} />
-          <SidebarNavItem to="/costs" label="Costs" icon={DollarSign} />
-          {/* One entry — /audit merged into the rich Activity feed (PAP-16302). */}
-          <SidebarNavItem to="/activity" label="Activity" icon={History} />
-          <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
         </SidebarSection>
+
+        {isAdmin ? (
+          <SidebarSection label="Admin" collapsible={{ open: adminOpen, onOpenChange: setAdminOpen }}>
+            <SidebarNavItem to="/timeline" label="Timeline" icon={GanttChartSquare} />
+            <SidebarNavItem to="/costs" label="Costs" icon={DollarSign} />
+            {/* One entry — /audit merged into the rich Activity feed (PAP-16302). */}
+            <SidebarNavItem to="/activity" label="Activity" icon={History} />
+            <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
+          </SidebarSection>
+        ) : null}
 
         <PluginSlotOutlet
           slotTypes={["sidebarPanel"]}

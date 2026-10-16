@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { accessApi, type CurrentBoardAccess } from "@/api/access";
 import { queryKeys } from "@/lib/queryKeys";
 import { useOptionalCompany } from "@/context/CompanyContext";
+import { isCompanyAdmin } from "./useCompanyAdmin";
 
 /**
  * Whether a board may invite people to `companyId` on a self-hosted instance,
@@ -18,13 +19,7 @@ export function canInviteCompanyMembers(
   companyId: string | null | undefined,
   boardAccess: CurrentBoardAccess | undefined,
 ): boolean {
-  if (!boardAccess) return false;
-  if (boardAccess.source === "local_implicit" || boardAccess.isInstanceAdmin) return true;
-  if (!companyId) return false;
-  const membership = boardAccess.memberships?.find(
-    (item) => item.companyId === companyId && item.status === "active",
-  );
-  return membership?.membershipRole === "owner" || membership?.membershipRole === "admin";
+  return isCompanyAdmin(companyId, boardAccess);
 }
 
 /**

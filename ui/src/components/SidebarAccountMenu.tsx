@@ -15,6 +15,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { useCloudInviteUrl } from "@/hooks/useCloudInviteUrl";
 import { useCanInviteCompanyMembers } from "@/hooks/useCompanyInviteAccess";
+import { useCompanyAdmin } from "@/hooks/useCompanyAdmin";
 import { useHiddenSettings } from "@/hooks/useHiddenSettings";
 import { useSignOut } from "@/hooks/useSignOut";
 import { useStagingCommit } from "@/hooks/useStagingCommit";
@@ -133,6 +134,9 @@ export function SidebarAccountMenu({
   // to boards that hold it (company owner/admin, instance admins, local
   // boards) so a plain member is never sent to a permission error.
   const canInviteMembers = useCanInviteCompanyMembers(!isCloud);
+  // Company settings are an admin surface; members reach their own profile
+  // from the header link above.
+  const { isAdmin } = useCompanyAdmin();
   const inviteHref = isCloud ? cloudInviteUrl : canInviteMembers ? INVITES_PATH : null;
   const showInvite =
     hiddenSettingsLoaded &&
@@ -229,12 +233,14 @@ export function SidebarAccountMenu({
             </div>
 
             <div className="flex flex-1 flex-col gap-0.5 border-t border-border px-2.5 pb-2.5 pt-2">
-              <MenuAction
-                label="Settings"
-                icon={Settings}
-                href="/company/settings"
-                onClick={closeNavigationChrome}
-              />
+              {isAdmin ? (
+                <MenuAction
+                  label="Settings"
+                  icon={Settings}
+                  href="/company/settings"
+                  onClick={closeNavigationChrome}
+                />
+              ) : null}
               {showInvite && inviteHref ? (
                 <MenuAction
                   label="Invite"

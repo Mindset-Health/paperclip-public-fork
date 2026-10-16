@@ -693,6 +693,40 @@ describe("SidebarAccountMenu", () => {
     });
   });
 
+  it("offers company settings to admins only", async () => {
+    for (const [access, expected] of [[boardAccess("operator"), false], [boardAccess("owner"), true]] as const) {
+      const root = createRoot(container);
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      queryClient.setQueryData(queryKeys.health, {
+        status: "ok",
+        deploymentMode: "authenticated",
+      });
+      mockGetCurrentBoardAccess.mockResolvedValue(access);
+
+      await act(async () => {
+        root.render(
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <SidebarAccountMenu deploymentMode="authenticated" open />
+            </TooltipProvider>
+          </QueryClientProvider>,
+        );
+      });
+      await flushReact();
+      await flushReact();
+
+      const popover = document.body.querySelector('[data-slot="popover-content"]');
+      expect(popover?.querySelector('a[href="/company/settings"]') !== null).toBe(expected);
+      expect(popover?.querySelector('a[aria-label="View profile"]')).not.toBeNull();
+
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
   it.each([
     ["instance admin", boardAccess("viewer", { isInstanceAdmin: true })],
     ["local board", boardAccess("viewer", { source: "local_implicit" })],

@@ -42,6 +42,7 @@ import { queryKeys } from "../lib/queryKeys";
 import { attentionBadgeCount } from "../lib/attention";
 import { useInboxBadge } from "../hooks/useInboxBadge";
 import { useStreamlinedUiEnabled } from "../hooks/useStreamlinedUiEnabled";
+import { useCompanyAdmin } from "../hooks/useCompanyAdmin";
 import { usePublishSharedQueryData, useSharedPollingQuery } from "../hooks/useSharedPolling";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
@@ -57,6 +58,10 @@ export function Sidebar({ children }: { children?: ReactNode }) {
   // one policy across static nav groups and the data-driven sections.
   const [workOpen, setWorkOpen] = useState(true);
   const [organizationOpen, setOrganizationOpen] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(true);
+  // Employees (company members) see the work surfaces; the Admin section
+  // only appears for company owners/admins and instance admins.
+  const { isAdmin } = useCompanyAdmin();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const { collapsed, peeking } = useSidebar();
   const { enabled: streamlinedUiEnabled } = useStreamlinedUiEnabled();
@@ -275,7 +280,14 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             <SidebarNavItem to="/agents" label="Agents" icon={Users} />
             <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
             <SidebarNavItem to="/apps" label="Connectors" icon={Unplug} />
+          </SidebarSection>
+        ) : null}
+
+        {streamlinedUiEnabled && isAdmin ? (
+          <SidebarSection label="Admin" collapsible={{ open: adminOpen, onOpenChange: setAdminOpen }}>
             <SidebarNavItem to="/activity" label="Audit" icon={History} />
+            <SidebarNavItem to="/activity/costs" label="Costs" icon={DollarSign} />
+            <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
           </SidebarSection>
         ) : null}
 
@@ -293,11 +305,15 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             >
               <SidebarNavItem to="/org" label="Org" icon={Network} />
               <SidebarNavItem to="/apps" label="Connectors" icon={Unplug} />
-              <SidebarNavItem to="/timeline" label="Timeline" icon={GanttChartSquare} />
-              <SidebarNavItem to="/costs" label="Costs" icon={DollarSign} />
-              <SidebarNavItem to="/activity" label="Activity" icon={History} />
-              <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
             </SidebarSection>
+            {isAdmin ? (
+              <SidebarSection label="Admin" collapsible={{ open: adminOpen, onOpenChange: setAdminOpen }}>
+                <SidebarNavItem to="/timeline" label="Timeline" icon={GanttChartSquare} />
+                <SidebarNavItem to="/costs" label="Costs" icon={DollarSign} />
+                <SidebarNavItem to="/activity" label="Activity" icon={History} />
+                <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
+              </SidebarSection>
+            ) : null}
           </>
         )}
 

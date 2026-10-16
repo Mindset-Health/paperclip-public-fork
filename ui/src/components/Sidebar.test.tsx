@@ -84,6 +84,12 @@ vi.mock("../hooks/useInboxBadge", () => ({
   useInboxBadge: () => mockInboxBadge,
 }));
 
+const mockCompanyAdmin = vi.hoisted(() => ({ isAdmin: true, loaded: true }));
+
+vi.mock("../hooks/useCompanyAdmin", () => ({
+  useCompanyAdmin: () => mockCompanyAdmin,
+}));
+
 vi.mock("@/plugins/slots", () => ({
   PluginSlotOutlet: ({ slotTypes }: { slotTypes: string[] }) => (
     <div data-plugin-slot-types={slotTypes.join(",")}>Plugin slot outlet</div>
@@ -165,6 +171,7 @@ describe("Sidebar", () => {
     mockSidebar.peeking = false;
     mockInboxBadge.inbox = 0;
     mockInboxBadge.failedRuns = 0;
+    mockCompanyAdmin.isAdmin = true;
   });
 
   afterEach(() => {
@@ -249,10 +256,25 @@ describe("Sidebar", () => {
     expect(agentLinks).toHaveLength(1);
     expect([...container.querySelectorAll('a[href="/activity"]')]).toHaveLength(1);
     expect(navLabels).toContain("Audit");
-    expect(navLabels).not.toContain("Settings");
     expect(navLabels).not.toContain("Activity");
-    expect(navLabels).not.toContain("Costs");
     expect(container.querySelector('[data-testid="sidebar-recent-tasks"]')).not.toBeNull();
+
+    flushSync(() => {
+      root.unmount();
+    });
+  });
+
+  it("hides the Admin section from members", async () => {
+    mockCompanyAdmin.isAdmin = false;
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: false });
+    const root = await renderSidebar();
+
+    const navLabels = [...container.querySelectorAll("nav a")].map((a) => a.textContent?.trim());
+    expect(navLabels).toEqual(expect.arrayContaining(["Tasks", "Agents", "Skills", "Connectors"]));
+    expect(navLabels).not.toContain("Audit");
+    expect(navLabels).not.toContain("Costs");
+    expect(navLabels).not.toContain("Settings");
+    expect(container.textContent).not.toContain("Admin");
 
     flushSync(() => {
       root.unmount();
@@ -311,6 +333,25 @@ describe("Sidebar", () => {
     expect(labels).not.toContain("Projects");
     expect(container.querySelector('a[href="/agents"]')).toBeNull();
     expect(container.querySelector("aside")?.classList).toContain("border-r");
+
+    flushSync(() => {
+      root.unmount();
+    });
+  });
+
+  it("keeps legacy admin pages out of members' navigation", async () => {
+    mockCompanyAdmin.isAdmin = false;
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({
+      enableStreamlinedUi: false,
+      enableApps: true,
+    });
+    const root = await renderSidebar();
+
+    const labels = [...container.querySelectorAll("nav a")].map((anchor) => anchor.textContent?.trim());
+    expect(labels).toEqual(expect.arrayContaining(["Org", "Connectors"]));
+    for (const adminLabel of ["Timeline", "Costs", "Activity", "Settings"]) {
+      expect(labels).not.toContain(adminLabel);
+    }
 
     flushSync(() => {
       root.unmount();
@@ -510,7 +551,7 @@ describe("Sidebar", () => {
     });
   });
 
-  it("groups and orders the streamlined Work and Org navigation", async () => {
+  it("groups and orders the streamlined Work, Org and Admin navigation", async () => {
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({
       enableIsolatedWorkspaces: false,
       enableApps: true,
@@ -520,12 +561,16 @@ describe("Sidebar", () => {
     const sections = [...container.querySelectorAll("nav > div")];
     const workSection = sections.find((section) => section.textContent?.startsWith("Work"));
     const orgSection = sections.find((section) => section.textContent?.startsWith("Org"));
+    const adminSection = sections.find((section) => section.textContent?.startsWith("Admin"));
     const labels = (section: Element | undefined) => [...(section?.querySelectorAll("a") ?? [])]
       .map((anchor) => anchor.textContent?.trim());
 
     expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts"]);
-    expect(labels(orgSection)).toEqual(["Agents", "Skills", "Connectors", "Audit"]);
+    expect(labels(orgSection)).toEqual(["Agents", "Skills", "Connectors"]);
+    expect(labels(adminSection)).toEqual(["Audit", "Costs", "Settings"]);
+    expect(adminSection?.querySelector('a[href="/activity/costs"]')).not.toBeNull();
     expect(sections.indexOf(workSection!)).toBeLessThan(sections.indexOf(orgSection!));
+    expect(sections.indexOf(orgSection!)).toBeLessThan(sections.indexOf(adminSection!));
     expect(
       workSection?.querySelector('a[href="/issues"] svg')?.classList.contains("lucide-circle-check"),
     ).toBe(true);
