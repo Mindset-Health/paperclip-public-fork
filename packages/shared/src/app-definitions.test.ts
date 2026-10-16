@@ -286,6 +286,15 @@ describe("AppDefinition catalog", () => {
     for (const entry of BLOCKED_MCP_PROVIDERS)
       expect(connectableSlugs.has(entry.slug)).toBe(false);
   });
+  it("offers Amplitude's hosted MCP server in the US and EU regions", () => {
+    const amplitude = getConnectableAppDefinition("amplitude")!;
+    expect(amplitude.methods.map((method) => [method.key, method.defaults?.serverUrl])).toEqual([
+      ["mcp-oauth", "https://mcp.amplitude.com/mcp"],
+      ["mcp-oauth-eu", "https://mcp.eu.amplitude.com/mcp"],
+    ]);
+    expect(amplitude.methods.every((method) => method.transport === "mcp_remote" && method.auth === "oauth")).toBe(true);
+    expect(getAppDefinitionForUrl("https://mcp.eu.amplitude.com/mcp")?.slug).toBe("amplitude");
+  });
   it("separates GitHub tools from the review bot without changing the provider identity", () => {
     const github = getConnectableAppDefinition("github")!;
     const bot = getConnectableAppDefinition("github-code-review-bot")!;

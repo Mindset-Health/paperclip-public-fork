@@ -16,6 +16,7 @@ export const CONNECTABLE_APP_SLUGS = new Set([
   "notion",
   "railway",
   "posthog",
+  "amplitude",
   "linear",
   "google-sheets",
   "context7",
