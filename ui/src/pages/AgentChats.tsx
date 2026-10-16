@@ -4,6 +4,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { Button } from "@/components/ui/button";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useAgentChatNavigation, useOpenAgentChat } from "@/hooks/useAgentChatNavigation";
+import { usePrimaryChatAgent } from "@/hooks/usePrimaryChatAgent";
 import { recordedAgentChatIssueId, useRecentAgentChats } from "@/lib/recent-agent-chats";
 import { Link, useNavigate } from "@/lib/router";
 import { agentRouteRef } from "@/lib/utils";
@@ -29,7 +30,16 @@ function AgentChatsContent({ companyId, userId, enabled, loaded, agents, chats, 
   // missing agent or a saved issue needs history to validate that visit.
   const needsHistory = !!firstId && (!firstAgent || !!recordedAgentChatIssueId(companyId ?? "", userId, firstId));
   const resolvingRecent = recentIds.length > 0 && !blockingError && (!agents.isFetched || !session.isFetched || (needsHistory && !chats.isFetched && !chats.error));
-  const recentChatPath = loaded && enabled && companyId && !blockingError && !resolvingRecent
+  // Dixie: the main chat is the company's primary agent; the picker and the
+  // recent-chat redirect apply only when none is configured.
+  const primaryRef = usePrimaryChatAgent();
+  const primaryAgent = primaryRef
+    ? agents.data?.find(agent => agent.status !== "terminated" && (agent.id === primaryRef || agentRouteRef(agent) === primaryRef))
+    : undefined;
+  const primaryChatPath = loaded && enabled && companyId && !blockingError && primaryAgent
+    ? `/chats/${encodeURIComponent(agentRouteRef(primaryAgent))}`
+    : undefined;
+  const recentChatPath = primaryChatPath ?? (loaded && enabled && companyId && !blockingError && !resolvingRecent
     ? recentIds.map(id => {
       const agent = agents.data?.find(item => item.id === id);
       const historyIssue = chats.data?.find(chat => chat.conversationAgentId === id);
@@ -40,14 +50,14 @@ function AgentChatsContent({ companyId, userId, enabled, loaded, agents, chats, 
       if (historyIssue) return `/chats/${encodeURIComponent(id)}`;
       return null;
     }).find((path): path is string => path !== null)
-    : undefined;
+    : undefined);
   useEffect(() => {
     if (recentChatPath) navigate(recentChatPath, { replace: true });
   }, [navigate, recentChatPath]);
   if (!loaded) return <p role="status" className="text-sm text-muted-foreground">Loading chat…</p>;
   if (!enabled) return <p className="text-sm text-muted-foreground">Agent Chat is disabled. Enable it in Experimental settings.</p>;
   if (!companyId) return <p className="text-sm text-muted-foreground">Select a company to start a conversation.</p>;
-  if (resolvingRecent || recentChatPath) return <p role="status" className="text-sm text-muted-foreground">Opening chat…</p>;
+  if (resolvingRecent || recentChatPath || (primaryRef && agents.isPending)) return <p role="status" className="text-sm text-muted-foreground">Opening chat…</p>;
   const error = blockingError ?? (recentIds.length > 0 ? chats.error : null);
   return <div className="mx-auto flex h-full max-w-xl flex-col justify-center gap-6 px-4 py-12">
     <div className="flex flex-col gap-3">
