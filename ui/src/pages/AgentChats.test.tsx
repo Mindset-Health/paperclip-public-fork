@@ -15,7 +15,10 @@ const state = vi.hoisted(() => ({
   chatsError: null as Error | null,
   sessionError: null as Error | null,
   navigate: vi.fn(),
+  primaryChatAgent: null as string | null,
 }));
+
+vi.mock("@/hooks/usePrimaryChatAgent", () => ({ usePrimaryChatAgent: () => state.primaryChatAgent }));
 
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: vi.fn() }) }));
 vi.mock("@/hooks/useAgentChatNavigation", () => ({
@@ -56,6 +59,7 @@ beforeEach(() => {
   state.chatsError = null;
   state.sessionError = null;
   state.navigate.mockReset();
+  state.primaryChatAgent = null;
   for (const id of ["alice", "bob", "removed", "retired-id"])
     recordAgentChatVisit("company-a", "user-a", id, null);
   localStorage.setItem("paperclip.recentAgentChats:company-a:user-a", "[]");
@@ -73,6 +77,21 @@ afterEach(async () => {
 });
 
 describe("Chat landing", () => {
+  it("opens the primary chat agent ahead of recent chats", async () => {
+    recordAgentChatVisit("company-a", "user-a", "alice");
+    state.agents = [agent("alice"), agent("dixie")];
+    state.primaryChatAgent = "dixie-slug";
+    await render();
+    expect(state.navigate).toHaveBeenCalledWith("/chats/dixie-slug", { replace: true });
+  });
+
+  it("falls back to recent chats when the primary agent is not in the roster", async () => {
+    recordAgentChatVisit("company-a", "user-a", "alice");
+    state.primaryChatAgent = "dixie-slug";
+    await render();
+    expect(state.navigate).toHaveBeenCalledWith("/chats/alice-slug", { replace: true });
+  });
+
   it("opens the most recently visited agent and replaces the landing history entry", async () => {
     recordAgentChatVisit("company-a", "user-a", "alice");
     recordAgentChatVisit("company-a", "user-a", "bob");

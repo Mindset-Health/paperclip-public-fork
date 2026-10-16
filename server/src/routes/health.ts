@@ -1,5 +1,6 @@
 import { supportsLocalAiLogin } from "../services/local-ai-login-policy.js";
 import { resolveAuthProviderName } from "../auth/gcp-iap.js";
+import { resolvePrimaryChatAgent } from "../dixie/primary-chat.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
@@ -413,6 +414,7 @@ export function healthRoutes(
         deploymentExposure: opts.deploymentExposure,
         localAiLoginSupported: supportsLocalAiLogin(opts),
         ...(resolveAuthProviderName() === "gcp-iap" ? { authProvider: "gcp-iap" } : {}),
+        ...(resolvePrimaryChatAgent() ? { primaryChatAgent: resolvePrimaryChatAgent() } : {}),
         commit,
         bootstrapStatus,
         bootstrapInviteActive,
@@ -438,6 +440,7 @@ export function healthRoutes(
       deploymentExposure: opts.deploymentExposure,
         localAiLoginSupported: supportsLocalAiLogin(opts),
         ...(resolveAuthProviderName() === "gcp-iap" ? { authProvider: "gcp-iap" } : {}),
+        ...(resolvePrimaryChatAgent() ? { primaryChatAgent: resolvePrimaryChatAgent() } : {}),
       authReady: opts.authReady,
       bootstrapStatus,
       bootstrapInviteActive,

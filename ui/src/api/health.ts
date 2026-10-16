@@ -35,6 +35,8 @@ export type HealthStatus = {
   localAiLoginSupported?: boolean;
   /** Dixie: "gcp-iap" when browser identity comes from Google Cloud IAP. */
   authProvider?: "better-auth" | "gcp-iap";
+  /** Dixie: URL key of the agent the Chat landing opens (PAPERCLIP_PRIMARY_CHAT_AGENT). */
+  primaryChatAgent?: string;
   authReady?: boolean;
   bootstrapStatus?: "ready" | "bootstrap_pending";
   bootstrapInviteActive?: boolean;
