@@ -19,6 +19,13 @@ vi.mock("./hooks/useStreamlinedUiEnabled", () => ({
   useStreamlinedUiEnabled: () => streamlinedUiState,
 }));
 
+// Audit pages sit behind AdminRouteGate; these routes are exercised as an admin.
+const companyAdminState = vi.hoisted(() => ({ isAdmin: true, loaded: true }));
+
+vi.mock("./hooks/useCompanyAdmin", () => ({
+  useCompanyAdmin: () => companyAdminState,
+}));
+
 // jsdom's CSS parser rejects the custom-property marker rule stitches inserts
 // (`--sxs{--sxs:N}`), pulled into <App>'s eager import graph transitively via
 // @codesandbox/sandpack-react. Substitute a benign, valid rule on parse failure
@@ -178,6 +185,7 @@ describe("App Activity routing (PAP-16302)", () => {
     companyState = { companies: [PAP_COMPANY], selected: PAP_COMPANY };
     streamlinedUiState.enabled = true;
     streamlinedUiState.loaded = true;
+    companyAdminState.isAdmin = true;
   });
 
   afterEach(() => {
@@ -190,6 +198,14 @@ describe("App Activity routing (PAP-16302)", () => {
     const root = renderAppAt(container, "/PAP/activity");
     await waitForRoute(container, "ACTIVITY_PAGE@/PAP/activity");
     expect(container.textContent).not.toContain("No organization matches prefix");
+    flushSync(() => root.unmount());
+  });
+
+  it("shows members an administrators-only notice instead of Activity", async () => {
+    companyAdminState.isAdmin = false;
+    const root = renderAppAt(container, "/PAP/activity/costs");
+    await waitForRoute(container, "This page is for administrators");
+    expect(container.textContent).not.toContain("AUDIT_COSTS");
     flushSync(() => root.unmount());
   });
 

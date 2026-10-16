@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n";
 import { Layout } from "./components/Layout";
 import { Layout as ProductionLayout } from "./components/Layout.production";
+import { AdminRouteGate } from "./components/AdminRouteGate";
 import { ConferenceRoomChatGate } from "./components/ConferenceRoomChatGate";
 import { TaskChatLab } from "./pages/TaskChatLab";
 import { PipelinesExperimentalGate } from "./components/PipelinesExperimentalGate";
@@ -157,47 +158,52 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
       <Route index element={<Navigate to="dashboard" replace />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
-      <Route
-        path="timeline"
-        element={streamlinedUiEnabled ? <AuditCompatibilityRedirect to="/activity/timeline" /> : <Timeline />}
-      />
+      <Route element={<AdminRouteGate />}>
+        <Route
+          path="timeline"
+          element={streamlinedUiEnabled ? <AuditCompatibilityRedirect to="/activity/timeline" /> : <Timeline />}
+        />
+      </Route>
       <Route path="onboarding" element={<OnboardingRoutePage />} />
       <Route path="companies" element={<Companies />} />
-      <Route path="company/settings" element={<CompanySettings />} />
-      <Route path="company/settings/environments" element={<Navigate to="/company/settings/instance/environments" replace />} />
-      <Route path="company/settings/cloud-upstream" element={<Navigate to="/company/export" replace />} />
-      <Route element={<HiddenSettingsPageGate pageKey="company.members" />}>
-        <Route path="company/settings/members" element={<CompanyAccess />} />
-        <Route path="company/settings/access" element={<CompanyAccessLegacyRoute />} />
-      </Route>
-      {/* Invites moved into the Members page; the old URL redirects (and stays
-          gated so a hidden Invites surface never round-trips through it). */}
-      <Route element={<HiddenSettingsPageGate pageKey="company.invites" />}>
-        <Route
-          path="company/settings/invites"
-          element={<Navigate to="/company/settings/members?tab=invites" replace />}
-        />
-      </Route>
-      <Route element={<HiddenSettingsPageGate pageKey="company.export" />}>
-        <Route
-          path="company/export/*"
-          element={(
-            <Suspense fallback={<PaperclipLoading />}>
-              <CompanyExport />
-            </Suspense>
-          )}
-        />
-      </Route>
-      <Route element={<CloudManagedPageGate />}>
-        <Route element={<HiddenSettingsPageGate pageKey="company.import" />}>
-          <Route path="company/import" element={<CompanyImport />} />
+      {/* Company settings, export/import and secrets are admin pages (Dixie). */}
+      <Route element={<AdminRouteGate />}>
+        <Route path="company/settings" element={<CompanySettings />} />
+        <Route path="company/settings/environments" element={<Navigate to="/company/settings/instance/environments" replace />} />
+        <Route path="company/settings/cloud-upstream" element={<Navigate to="/company/export" replace />} />
+        <Route element={<HiddenSettingsPageGate pageKey="company.members" />}>
+          <Route path="company/settings/members" element={<CompanyAccess />} />
+          <Route path="company/settings/access" element={<CompanyAccessLegacyRoute />} />
         </Route>
+        {/* Invites moved into the Members page; the old URL redirects (and stays
+            gated so a hidden Invites surface never round-trips through it). */}
+        <Route element={<HiddenSettingsPageGate pageKey="company.invites" />}>
+          <Route
+            path="company/settings/invites"
+            element={<Navigate to="/company/settings/members?tab=invites" replace />}
+          />
+        </Route>
+        <Route element={<HiddenSettingsPageGate pageKey="company.export" />}>
+          <Route
+            path="company/export/*"
+            element={(
+              <Suspense fallback={<PaperclipLoading />}>
+                <CompanyExport />
+              </Suspense>
+            )}
+          />
+        </Route>
+        <Route element={<CloudManagedPageGate />}>
+          <Route element={<HiddenSettingsPageGate pageKey="company.import" />}>
+            <Route path="company/import" element={<CompanyImport />} />
+          </Route>
+        </Route>
+        <Route element={<HiddenSettingsPageGate pageKey="company.secrets" />}>
+          <Route path="company/settings/secrets" element={<Secrets />} />
+        </Route>
+        <Route path="company/settings/tools" element={<LegacyToolsSettingsRedirect />} />
+        <Route path="company/settings/tools/:tab" element={<LegacyToolsSettingsRedirect />} />
       </Route>
-      <Route element={<HiddenSettingsPageGate pageKey="company.secrets" />}>
-        <Route path="company/settings/secrets" element={<Secrets />} />
-      </Route>
-      <Route path="company/settings/tools" element={<LegacyToolsSettingsRedirect />} />
-      <Route path="company/settings/tools/:tab" element={<LegacyToolsSettingsRedirect />} />
       <Route path="tools" element={<LegacyToolsRedirect />} />
       <Route path="tools/:tab" element={<LegacyToolsRedirect />} />
       <Route path="apps" element={<Browse />} />
@@ -239,37 +245,42 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
       <Route path="apps/app/:applicationId/:tab" element={<AppNotConnected />} />
       <Route path="apps/:connectionId" element={<Navigate to="permissions" replace />} />
       <Route path="apps/:connectionId/:tab" element={<AppDetail />} />
-      <Route path="company/settings/instance" element={<Navigate to="/company/settings" replace />} />
+      <Route element={<AdminRouteGate />}>
+        <Route path="company/settings/instance" element={<Navigate to="/company/settings" replace />} />
+      </Route>
       <Route element={<HiddenSettingsPageGate pageKey="instance.profile" />}>
         <Route path="company/settings/instance/profile" element={<ProfileSettings />} />
       </Route>
-      <Route path="company/settings/instance/general" element={<Navigate to="/company/settings" replace />} />
-      <Route path="company/settings/instance/heartbeats" element={<Navigate to="/company/settings" replace />} />
-      <Route element={<HiddenSettingsPageGate pageKey="instance.environments" />}>
-        <Route path="company/settings/instance/environments" element={<CompanyEnvironments />} />
-        <Route path="company/settings/instance/environments/new" element={<CompanyEnvironments mode="create" />} />
-        <Route path="company/settings/instance/environments/:environmentId/edit" element={<CompanyEnvironments mode="edit" />} />
+      {/* Instance and plugin settings and skill sources/studio are admin pages (Dixie); members keep their own profile above. */}
+      <Route element={<AdminRouteGate />}>
+        <Route path="company/settings/instance/general" element={<Navigate to="/company/settings" replace />} />
+        <Route path="company/settings/instance/heartbeats" element={<Navigate to="/company/settings" replace />} />
+        <Route element={<HiddenSettingsPageGate pageKey="instance.environments" />}>
+          <Route path="company/settings/instance/environments" element={<CompanyEnvironments />} />
+          <Route path="company/settings/instance/environments/new" element={<CompanyEnvironments mode="create" />} />
+          <Route path="company/settings/instance/environments/:environmentId/edit" element={<CompanyEnvironments mode="edit" />} />
+        </Route>
+        <Route element={<HiddenSettingsPageGate pageKey="instance.access" />}>
+          <Route path="company/settings/instance/access" element={<InstanceAccess />} />
+        </Route>
+        <Route element={<HiddenSettingsPageGate pageKey="instance.experimental" />}>
+          <Route path="company/settings/instance/experimental" element={<InstanceExperimentalSettings />} />
+        </Route>
+        <Route element={<HiddenSettingsPageGate pageKey="instance.plugins" />}>
+          <Route path="company/settings/instance/plugins" element={<PluginManager />} />
+          <Route path="company/settings/instance/plugins/:pluginId" element={<PluginSettings />} />
+        </Route>
+        <Route element={<HiddenSettingsPageGate pageKey="instance.adapters" />}>
+          <Route path="company/settings/instance/adapters" element={<AdapterManager />} />
+        </Route>
+        <Route path="company/settings/:settingsRoutePath/*" element={<CompanySettingsPluginPage />} />
+        <Route path="skills/sources" element={<SkillSources />} />
+        <Route path="skills/sources/:sourceId" element={<SkillSources />} />
+        <Route path="skills/studio" element={<SkillStudio />} />
+        <Route path="skills/studio/new" element={<SkillStudio />} />
+        <Route path="skills/studio/:skillId" element={<SkillStudio />} />
+        <Route path="skills/:skillId/studio" element={<LegacySkillStudioRedirect />} />
       </Route>
-      <Route element={<HiddenSettingsPageGate pageKey="instance.access" />}>
-        <Route path="company/settings/instance/access" element={<InstanceAccess />} />
-      </Route>
-      <Route element={<HiddenSettingsPageGate pageKey="instance.experimental" />}>
-        <Route path="company/settings/instance/experimental" element={<InstanceExperimentalSettings />} />
-      </Route>
-      <Route element={<HiddenSettingsPageGate pageKey="instance.plugins" />}>
-        <Route path="company/settings/instance/plugins" element={<PluginManager />} />
-        <Route path="company/settings/instance/plugins/:pluginId" element={<PluginSettings />} />
-      </Route>
-      <Route element={<HiddenSettingsPageGate pageKey="instance.adapters" />}>
-        <Route path="company/settings/instance/adapters" element={<AdapterManager />} />
-      </Route>
-      <Route path="company/settings/:settingsRoutePath/*" element={<CompanySettingsPluginPage />} />
-      <Route path="skills/sources" element={<SkillSources />} />
-      <Route path="skills/sources/:sourceId" element={<SkillSources />} />
-      <Route path="skills/studio" element={<SkillStudio />} />
-      <Route path="skills/studio/new" element={<SkillStudio />} />
-      <Route path="skills/studio/:skillId" element={<SkillStudio />} />
-      <Route path="skills/:skillId/studio" element={<LegacySkillStudioRedirect />} />
       <Route
         path="skills/*"
         element={streamlinedUiEnabled ? <CompanySkills /> : <ProductionSurface><ProductionCompanySkills /></ProductionSurface>}
@@ -405,29 +416,32 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
       <Route path="approvals/pending" element={<Approvals />} />
       <Route path="approvals/all" element={<Approvals />} />
       <Route path="approvals/:approvalId" element={<ApprovalDetail />} />
-      <Route path="activity" element={streamlinedUiEnabled ? <CompanyActivity /> : <ProductionSurface><ProductionCompanyActivity /></ProductionSurface>} />
-      {streamlinedUiEnabled ? (
-        <>
-          <Route path="activity/runs" element={<AuditHub section="runs" />} />
-          <Route path="activity/costs" element={<AuditHub section="costs" />} />
-          <Route path="activity/budgets" element={<AuditHub section="budgets" />} />
-          <Route path="activity/timeline" element={<AuditHub section="timeline" />} />
-          <Route path="audit" element={<AuditCompatibilityRedirect to="/activity" forceAgentMode />} />
-          <Route path="audit/activity" element={<AuditCompatibilityRedirect to="/activity" />} />
-          <Route path="audit/runs" element={<AuditCompatibilityRedirect to="/activity/runs" />} />
-          <Route path="audit/costs" element={<AuditCompatibilityRedirect to="/activity/costs" />} />
-          <Route path="audit/budgets" element={<AuditCompatibilityRedirect to="/activity/budgets" />} />
-          <Route path="audit/timeline" element={<AuditCompatibilityRedirect to="/activity/timeline" />} />
-          <Route path="runs" element={<AuditCompatibilityRedirect to="/activity/runs" />} />
-          <Route path="costs" element={<AuditCompatibilityRedirect to="/activity/costs" />} />
-          <Route path="budgets" element={<AuditCompatibilityRedirect to="/activity/budgets" />} />
-        </>
-      ) : (
-        <>
-          <Route path="costs" element={<ProductionSurface><ProductionCosts /></ProductionSurface>} />
-          <Route path="audit" element={<Navigate to="/activity?mode=agents" replace />} />
-        </>
-      )}
+      {/* Audit, runs and costs are admin pages (Dixie). */}
+      <Route element={<AdminRouteGate />}>
+        <Route path="activity" element={streamlinedUiEnabled ? <CompanyActivity /> : <ProductionSurface><ProductionCompanyActivity /></ProductionSurface>} />
+        {streamlinedUiEnabled ? (
+          <>
+            <Route path="activity/runs" element={<AuditHub section="runs" />} />
+            <Route path="activity/costs" element={<AuditHub section="costs" />} />
+            <Route path="activity/budgets" element={<AuditHub section="budgets" />} />
+            <Route path="activity/timeline" element={<AuditHub section="timeline" />} />
+            <Route path="audit" element={<AuditCompatibilityRedirect to="/activity" forceAgentMode />} />
+            <Route path="audit/activity" element={<AuditCompatibilityRedirect to="/activity" />} />
+            <Route path="audit/runs" element={<AuditCompatibilityRedirect to="/activity/runs" />} />
+            <Route path="audit/costs" element={<AuditCompatibilityRedirect to="/activity/costs" />} />
+            <Route path="audit/budgets" element={<AuditCompatibilityRedirect to="/activity/budgets" />} />
+            <Route path="audit/timeline" element={<AuditCompatibilityRedirect to="/activity/timeline" />} />
+            <Route path="runs" element={<AuditCompatibilityRedirect to="/activity/runs" />} />
+            <Route path="costs" element={<AuditCompatibilityRedirect to="/activity/costs" />} />
+            <Route path="budgets" element={<AuditCompatibilityRedirect to="/activity/budgets" />} />
+          </>
+        ) : (
+          <>
+            <Route path="costs" element={<ProductionSurface><ProductionCosts /></ProductionSurface>} />
+            <Route path="audit" element={<Navigate to="/activity?mode=agents" replace />} />
+          </>
+        )}
+      </Route>
       {/* Conference Room Chat surfaces (PAP-136/PAP-137): routes stay
           registered but redirect to the company home while the experimental
           flag is off. The board-level `artifacts` mount below is the new
