@@ -88,6 +88,7 @@ import { connectionIntentService } from "../services/connection-intents.js";
 import { redactRemoteUrlCredential } from "../services/remote-url-credentials.js";
 import { connectionIntentDeliveryService } from "../services/connection-intent-delivery.js";
 import type { heartbeatService } from "../services/heartbeat.js";
+import { BRAND_NAME } from "../brand.js";
 
 const COMPANY_INSTALL_DENIAL_REASON =
   "Only someone who can configure this connection can choose this.";
@@ -192,7 +193,7 @@ export function connectionIntentOAuthOutcomeHtml(input: {
     }
   })();
   const targetOrigin = JSON.stringify(openerOrigin ?? "");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Connection authorization</title></head><body><p>Returning to Paperclip…</p><script>const message=${message};const targetOrigin=${targetOrigin}||window.location.origin;if(window.opener&&window.opener!==window){window.opener.postMessage(message,targetOrigin);window.close();}else{window.location.replace(${fallback});}</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Connection authorization</title></head><body><p>Returning to ${BRAND_NAME}…</p><script>const message=${message};const targetOrigin=${targetOrigin}||window.location.origin;if(window.opener&&window.opener!==window){window.opener.postMessage(message,targetOrigin);window.close();}else{window.location.replace(${fallback});}</script></body></html>`;
 }
 
 // Some providers' consent pages navigate to this callback and, if their own
@@ -241,7 +242,7 @@ export function cloudConnectorEnrollmentOutcomeHtml(issuePrefix: string, returnT
   const fallback = JSON.stringify(fallbackPath).replaceAll("<", "\\u003c");
   // This document is served only after server-verified enrollment. The parent
   // independently re-reads enrollment status; browser messages grant no access.
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Paperclip connected</title></head><body><p>Paperclip is connected. Return to your task to finish connecting the app.</p><script>if(window.opener&&window.opener!==window){window.close();}else{const link=document.createElement("a");link.href=${fallback};link.textContent=${JSON.stringify(issueId ? "Return to task" : "Continue setup")};document.body.append(link);}</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${BRAND_NAME} connected</title></head><body><p>${BRAND_NAME} is connected. Return to your task to finish connecting the app.</p><script>if(window.opener&&window.opener!==window){window.close();}else{const link=document.createElement("a");link.href=${fallback};link.textContent=${JSON.stringify(issueId ? "Return to task" : "Continue setup")};document.body.append(link);}</script></body></html>`;
 }
 
 export function cloudConnectorEnrollmentReturnPath(issuePrefix: string, returnTo?: string | null): string {

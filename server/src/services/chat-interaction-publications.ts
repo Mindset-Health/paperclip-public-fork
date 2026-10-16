@@ -23,6 +23,7 @@ import {
   chatQuestionFormActionRecords,
   createChatQuestionFormDraft,
 } from "./chat-question-forms.js";
+import { BRAND_NAME } from "../brand.js";
 
 const MAX_NATIVE_QUESTION_OPTIONS = 12;
 const QUESTION_ACTION_PREFIX = "pcq:";
@@ -44,12 +45,12 @@ function terminalNativeInteractionCopy(
       const outcome = interaction.result?.outcome;
       const body =
         outcome === "skipped"
-          ? "Skipped in Paperclip"
+          ? `Skipped in ${BRAND_NAME}`
           : outcome === "withdrawn"
-            ? "Withdrawn in Paperclip"
+            ? `Withdrawn in ${BRAND_NAME}`
             : outcome === "addressee_deleted"
               ? "Cancelled: addressed agent was removed"
-              : "Cancelled in Paperclip";
+              : `Cancelled in ${BRAND_NAME}`;
       return { body, text: `${body}.` };
     }
     if (interaction.status === "expired") {
@@ -62,7 +63,7 @@ function terminalNativeInteractionCopy(
               ? "Expired: target is no longer current"
               : interaction.result?.outcome === "issue_closed"
                 ? "Expired: task is closed"
-                : "Expired in Paperclip";
+                : `Expired in ${BRAND_NAME}`;
       return { body, text: `${body}.` };
     }
     return null;
@@ -88,10 +89,10 @@ function terminalNativeInteractionCopy(
     const outcome = interaction.result?.outcome;
     const body =
       outcome === "skipped"
-        ? "Skipped in Paperclip."
+        ? `Skipped in ${BRAND_NAME}.`
         : outcome === "withdrawn"
-          ? "Withdrawn in Paperclip."
-          : "Cancelled in Paperclip.";
+          ? `Withdrawn in ${BRAND_NAME}.`
+          : `Cancelled in ${BRAND_NAME}.`;
     return { body, text: body };
   }
   if (interaction.status === "expired") {
@@ -103,7 +104,7 @@ function terminalNativeInteractionCopy(
           ? "Expired: replaced by a newer request"
           : interaction.result?.outcome === "issue_closed"
             ? "Expired: task is closed"
-            : "Expired in Paperclip";
+            : `Expired in ${BRAND_NAME}`;
     return { body, text: `${body}.` };
   }
   return null;
@@ -199,18 +200,18 @@ function textForQuestionInteraction(
   }
   lines.push(
     taskUrl
-      ? `Open the task in Paperclip to respond: ${taskUrl}`
-      : "Open the task in Paperclip to respond.",
+      ? `Open the task in ${BRAND_NAME} to respond: ${taskUrl}`
+      : `Open the task in ${BRAND_NAME} to respond.`,
   );
   return lines.join("\n");
 }
 
 function genericInteractionText(taskUrl: string | null): string {
   return [
-    "This task needs an authorized response in Paperclip.",
+    `This task needs an authorized response in ${BRAND_NAME}.`,
     taskUrl
-      ? `Open the task in Paperclip to respond: ${taskUrl}`
-      : "Open the task in Paperclip to respond.",
+      ? `Open the task in ${BRAND_NAME} to respond: ${taskUrl}`
+      : `Open the task in ${BRAND_NAME} to respond.`,
   ]
     .filter((value): value is string => Boolean(value))
     .join("\n\n");
@@ -366,7 +367,7 @@ export async function enqueueIssueInteractionChatPublications(
             ? [
                 {
                   type: "link" as const,
-                  label: "Open in Paperclip",
+                  label: `Open in ${BRAND_NAME}`,
                   url: taskUrl,
                 },
               ]
@@ -397,13 +398,13 @@ export async function enqueueIssueInteractionChatPublications(
                 "Input needed")
               : interaction.kind === "request_confirmation"
                 ? interaction.payload.prompt
-                : "Response needed in Paperclip",
+                : `Response needed in ${BRAND_NAME}`,
           body:
             interaction.kind === "ask_user_questions"
               ? (question?.helpText ?? undefined)
               : interaction.kind === "request_confirmation"
                 ? (interaction.payload.detailsMarkdown ?? undefined)
-                : "Open the task in Paperclip to review and respond.",
+                : `Open the task in ${BRAND_NAME} to review and respond.`,
           actions,
         },
       },

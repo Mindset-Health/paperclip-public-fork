@@ -389,6 +389,7 @@ import type {
   Thread,
 } from "chat";
 import { Actions, Button, Card, CardText, LinkButton } from "chat";
+import { BRAND_NAME } from "../brand.js";
 
 // Only these closed fields may reach Activity or a delivery-batch response.
 // The resolution predicate yields one boolean, never the private envelope.
@@ -794,8 +795,8 @@ const REQUIRED_GITHUB_PERMISSIONS = {
 } as const;
 
 const TELEGRAM_COMMANDS = [
-  { command: "task", description: "Start or continue a Paperclip task" },
-  { command: "status", description: "Show the active Paperclip task" },
+  { command: "task", description: `Start or continue a ${BRAND_NAME} task` },
+  { command: "status", description: `Show the active ${BRAND_NAME} task` },
   { command: "new", description: "Start a new task after the current one" },
   { command: "close", description: "Close the active chat conversation" },
 ] as const;
@@ -11205,7 +11206,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     const diagnostic =
       attachmentOmissionDetail(input.attachmentResult) ??
       "The Telegram attachment could not be imported";
-    const visibleFailure = `Paperclip could not safely import the attached Telegram file. Please resend it as a supported file under ${formatAttachmentSize(MAX_ATTACHMENT_BYTES)} or include text describing the request.`;
+    const visibleFailure = `${BRAND_NAME} could not safely import the attached Telegram file. Please resend it as a supported file under ${formatAttachmentSize(MAX_ATTACHMENT_BYTES)} or include text describing the request.`;
     const effectContext =
       input.runtimeContext ??
       runtimeContextForRecord(
@@ -13597,7 +13598,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                   text:
                     state === "queued"
                       ? "Your retry is queued."
-                      : "This retry was not started. Open the task in Paperclip for details.",
+                      : `This retry was not started. Open the task in ${BRAND_NAME} for details.`,
                   progressState: state === "queued" ? "queued" : "failed",
                 }),
                 state: "pending",
@@ -15923,12 +15924,12 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
             : controlCommand === "new"
               ? isTelegramForumTopic
                 ? existingIssue
-                  ? `${taskLabel} stays bound to this forum topic. Open a new Telegram forum topic to start a new Paperclip task.`
-                  : "Open a new Telegram forum topic to start a new Paperclip task."
-                : "Send your request to start a new Paperclip task."
+                  ? `${taskLabel} stays bound to this forum topic. Open a new Telegram forum topic to start a new ${BRAND_NAME} task.`
+                  : `Open a new Telegram forum topic to start a new ${BRAND_NAME} task.`
+                : `Send your request to start a new ${BRAND_NAME} task.`
               : existingConversation
                 ? isTelegramForumTopic
-                  ? "This chat conversation is closed. A later message here will continue the same Paperclip task."
+                  ? `This chat conversation is closed. A later message here will continue the same ${BRAND_NAME} task.`
                   : "This chat conversation is closed. Send another message to start a new task."
                 : "No task is active. Send a message to start one.";
         const publicationBinding =

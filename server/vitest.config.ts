@@ -15,6 +15,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Dixie fork: run upstream suites with upstream product copy (see src/brand.ts).
+    env: { DIXIE_BRAND_NAME: "Paperclip" },
     include: ["src/**/*.test.ts", "scripts/**/*.test.mjs"],
     // Each server suite boots + tears down its own embedded Postgres in
     // beforeAll/afterAll. Under the loaded serial shard (maxWorkers=1) the

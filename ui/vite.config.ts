@@ -6,6 +6,7 @@ import { createUiDevWatchOptions } from "./src/lib/vite-watch";
 import { createApiProxy } from "./src/lib/vite-api-proxy";
 import { serviceWorkerBuildIdPlugin } from "./src/lib/vite-sw-build-id";
 import { readBrowserBuildCommit } from "./src/lib/vite-build-commit";
+import { dixieBrandPlugin } from "./src/lib/vite-dixie-brand";
 
 const apiProxy = createApiProxy();
 
@@ -15,7 +16,7 @@ export default defineConfig(({ mode }) => ({
       readBrowserBuildCommit(__dirname),
     ),
   },
-  plugins: [react(), tailwindcss(), serviceWorkerBuildIdPlugin()],
+  plugins: [dixieBrandPlugin(), react(), tailwindcss(), serviceWorkerBuildIdPlugin()],
   build: {
     minify: "esbuild",
   },

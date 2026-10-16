@@ -5,6 +5,7 @@ import {
   askUserQuestionsQuestionOptionSchema,
   type AskUserQuestionsPayload,
 } from "@paperclipai/shared";
+import { rebrandText } from "../brand.js";
 
 // Everything the onboarding first agent is told lives as plain markdown under
 // server/src/onboarding-assets/first-task/ so the board can edit the wording
@@ -92,7 +93,7 @@ export async function renderOnboardingFirstTaskGreeting(
   placeholders: OnboardingFirstTaskPlaceholders,
 ): Promise<string> {
   const template = await loadFirstTaskAsset("greeting.md");
-  return fillFirstTaskPlaceholders(template, placeholders).trim();
+  return rebrandText(fillFirstTaskPlaceholders(template, placeholders)).trim();
 }
 
 // Layer C — the opening ask_user_questions card seeded as the agent right after

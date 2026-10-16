@@ -1,14 +1,14 @@
 {
   "id": "/",
-  "name": "Paperclip",
-  "short_name": "Paperclip",
-  "description": "AI-powered project management and agent coordination platform",
+  "name": "Dixie Flatline",
+  "short_name": "Dixie",
+  "description": "Mindset Health agent platform: project management and agent coordination",
   "start_url": "/",
   "scope": "/",
   "display": "browser",
   "orientation": "any",
-  "theme_color": "#18181b",
-  "background_color": "#18181b",
+  "theme_color": "#0b0f14",
+  "background_color": "#0b0f14",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

@@ -13,6 +13,7 @@ import {
   redactSensitiveValueOccurrences,
 } from "./redact-sensitive.js";
 import { recordResponsibleUserDenialOnActiveRun } from "../services/responsible-user-denial-run-outcomes.js";
+import { rebrandText } from "../brand.js";
 
 export interface ErrorContext {
   error: {
@@ -185,7 +186,7 @@ export function errorHandler(
       secretSensitiveServerError
         ? { error: "Internal server error" }
         : {
-            error: sanitizeSecretSensitiveResponse(req, err.message),
+            error: sanitizeSecretSensitiveResponse(req, rebrandText(err.message)),
             ...(typeof responseDetails?.code === "string"
               ? { code: responseDetails.code }
               : {}),

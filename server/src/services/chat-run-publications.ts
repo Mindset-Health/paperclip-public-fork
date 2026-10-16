@@ -36,6 +36,7 @@ import {
   SAFE_NATIVE_CHAT_PROGRESS_EVENT_TYPES,
   safeNativeChatProgressForEvent,
 } from "./safe-native-chat-progress.js";
+import { BRAND_NAME } from "../brand.js";
 
 type SafeRunMilestone =
   "queued" | "working" | "waiting_for_input" | "completed" | "failed";
@@ -157,20 +158,20 @@ export function safeMilestoneText(input: {
   const taskUrl = safeChatTaskUrl(input.publicBaseUrl, input.issueId);
   const recovery =
     input.milestone === "waiting_for_input"
-      ? `${input.agentName} needs a Paperclip admin to safely recover this turn before more work can start.`
+      ? `${input.agentName} needs a ${BRAND_NAME} admin to safely recover this turn before more work can start.`
       : input.errorCode === "low_trust_isolation_unavailable"
-        ? `${input.agentName} couldn't safely start this turn because this task was started for an unlinked external guest and isolated guest execution isn't available. Ask a Paperclip admin to create a private identity link for this account or enable isolated guest execution, then start a new task.`
+        ? `${input.agentName} couldn't safely start this turn because this task was started for an unlinked external guest and isolated guest execution isn't available. Ask a ${BRAND_NAME} admin to create a private identity link for this account or enable isolated guest execution, then start a new task.`
         : input.errorCode === "native_provider_usage_limit"
-          ? `${input.agentName} couldn't complete this turn because the model provider's usage allowance is exhausted. A Paperclip admin needs to restore capacity before retrying.`
+          ? `${input.agentName} couldn't complete this turn because the model provider's usage allowance is exhausted. A ${BRAND_NAME} admin needs to restore capacity before retrying.`
           : input.errorCode === "native_event_replay_conflict"
-            ? `${input.agentName} couldn't safely continue this turn. A Paperclip admin needs to review the run before it can be retried.`
+            ? `${input.agentName} couldn't safely continue this turn. A ${BRAND_NAME} admin needs to review the run before it can be retried.`
             : input.errorCode === "native_session_cleanup_quarantined"
-              ? `${input.agentName} couldn't start this turn because an earlier session needs recovery. Your request is saved. Ask a Paperclip admin to recover that session before retrying; sending the request again won't repair it.`
+              ? `${input.agentName} couldn't start this turn because an earlier session needs recovery. Your request is saved. Ask a ${BRAND_NAME} admin to recover that session before retrying; sending the request again won't repair it.`
               : `${input.agentName} stopped before completing this turn.`;
   return `${recovery}${
     taskUrl
-      ? ` Open the task in Paperclip: ${taskUrl}`
-      : " Open the task in Paperclip for details."
+      ? ` Open the task in ${BRAND_NAME}: ${taskUrl}`
+      : ` Open the task in ${BRAND_NAME} for details.`
   }`;
 }
 
