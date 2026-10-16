@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "slug": "amplitude",
+  "name": "Amplitude",
+  "description": "Query Amplitude analytics, charts, dashboards and experiments through Amplitude's hosted MCP server.",
+  "categories": [
+    "analytics"
+  ],
+  "featured": false,
+  "branding": {
+    "logoUrl": "/brands/apps/amplitude.svg"
+  },
+  "urlPatterns": [
+    "https://mcp.amplitude.com/*",
+    "https://mcp.eu.amplitude.com/*"
+  ],
+  "docsUrl": "https://amplitude.com/docs/amplitude-ai/amplitude-mcp",
+  "redirectConstraints": "https-or-loopback-http",
+  "methods": [
+    {
+      "key": "mcp-oauth",
+      "transport": "mcp_remote",
+      "auth": "oauth",
+      "ownershipModes": [
+        "dcr"
+      ],
+      "whenToUse": "Use browser sign-in for Amplitude's US-hosted MCP server (the default region).",
+      "defaults": {
+        "serverUrl": "https://mcp.amplitude.com/mcp",
+        "scopesHint": []
+      },
+      "guidanceMd": "Sign in with an Amplitude account. The connection can read and change only the projects that account can access, so use an account scoped to what agents should see.",
+      "riskTier": "S3",
+      "label": "Sign in with Amplitude (US)",
+      "consoleLinks": {
+        "docs": "https://amplitude.com/docs/amplitude-ai/amplitude-mcp"
+      }
+    },
+    {
+      "key": "mcp-oauth-eu",
+      "transport": "mcp_remote",
+      "auth": "oauth",
+      "ownershipModes": [
+        "dcr"
+      ],
+      "whenToUse": "Use this only when your Amplitude data resides in the EU region.",
+      "defaults": {
+        "serverUrl": "https://mcp.eu.amplitude.com/mcp",
+        "scopesHint": []
+      },
+      "guidanceMd": "Sign in with an Amplitude account in the EU data region. The connection can read and change only the projects that account can access.",
+      "riskTier": "S3",
+      "label": "Sign in with Amplitude (EU)",
+      "consoleLinks": {
+        "docs": "https://amplitude.com/docs/amplitude-ai/amplitude-mcp"
+      }
+    }
+  ]
+}
